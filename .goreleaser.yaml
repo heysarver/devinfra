@@ -16,26 +16,10 @@ builds:
       - amd64
       - arm64
 
-  - id: di
-    main: .
-    binary: di
-    ldflags:
-      - -s -w
-      - -X github.com/heysarver/devinfra/internal/version.Version={{.Version}}
-      - -X github.com/heysarver/devinfra/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/heysarver/devinfra/internal/version.Date={{.Date}}
-    goos:
-      - darwin
-      - linux
-    goarch:
-      - amd64
-      - arm64
-
 archives:
   - id: devinfra
     ids:
       - devinfra
-      - di
     formats:
       - tar.gz
     name_template: "devinfra_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
