@@ -1,0 +1,86 @@
+services:
+  # Socket proxy: prevents direct Docker socket exposure to Traefik
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy
+    restart: unless-stopped
+    networks:
+      - traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      CONTAINERS: 1        # Traefik needs to list/inspect containers
+      NETWORKS: 1          # Traefik needs network info for routing
+      VERSION: 1           # Traefik calls /version on startup
+      INFO: 1              # Traefik calls /info on startup
+      SERVICES: 0
+      TASKS: 0
+      POST: 0              # Read-only: no container creation/deletion
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+
+  traefik:
+    image: traefik:v3.6
+    container_name: traefik
+    restart: unless-stopped
+    depends_on:
+      - socket-proxy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE       # Required to bind ports 80/443
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=tcp://socket-proxy:2375"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entryPoints.web.address=:80"
+      - "--entryPoints.websecure.address=:443"
+      - "--entryPoints.websecure.http.tls=true"
+      - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../certs:/certs:ro
+      - ../dynamic:/etc/traefik/dynamic:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.test`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+
+  dnsmasq:
+    image: dockurr/dnsmasq:latest
+    container_name: dnsmasq
+    restart: unless-stopped
+    ports:
+      - "${DNS_PORT:-5354}:53/udp"
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./dnsmasq.conf:/etc/dnsmasq.conf:ro
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    name: traefik

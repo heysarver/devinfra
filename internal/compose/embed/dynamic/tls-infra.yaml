@@ -1,0 +1,6 @@
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/traefik.test+1.pem
+        keyFile: /certs/traefik.test+1-key.pem
