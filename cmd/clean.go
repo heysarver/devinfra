@@ -37,7 +37,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Fprint(os.Stderr, "Continue? [y/N] ")
 
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		if answer != "y" && answer != "Y" {
 			ui.Info("Cancelled.")
 			return nil
@@ -46,20 +46,20 @@ func runClean(cmd *cobra.Command, args []string) error {
 
 	// Stop infrastructure
 	ui.Info("Stopping infrastructure...")
-	compose.Down(ctx)
+	_ = compose.Down(ctx)
 
 	// Remove certs
 	certsDir := config.CertsDir()
 	certs, _ := filepath.Glob(filepath.Join(certsDir, "*.pem"))
 	for _, c := range certs {
-		os.Remove(c)
+		_ = os.Remove(c)
 	}
 
 	// Remove dynamic configs
 	dynamicDir := config.DynamicDir()
 	dynamics, _ := filepath.Glob(filepath.Join(dynamicDir, "*.yaml"))
 	for _, d := range dynamics {
-		os.Remove(d)
+		_ = os.Remove(d)
 	}
 
 	ui.Ok("Cleaned.")

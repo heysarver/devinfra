@@ -91,9 +91,9 @@ func ensureConfigSymlink() {
 	}
 
 	// Ensure ~/.config exists
-	os.MkdirAll(filepath.Join(home, ".config"), 0755)
+	_ = os.MkdirAll(filepath.Join(home, ".config"), 0755)
 
 	// Remove stale symlink if present, then create
-	os.Remove(dotConfigLink)
-	os.Symlink(configDir, dotConfigLink)
+	_ = os.Remove(dotConfigLink)
+	_ = os.Symlink(configDir, dotConfigLink)
 }

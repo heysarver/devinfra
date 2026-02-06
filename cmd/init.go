@@ -86,7 +86,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Create Docker network
 	ui.Info("Creating Docker network...")
-	compose.CreateNetwork(ctx)
+	_ = compose.CreateNetwork(ctx)
 
 	// Generate infrastructure certs
 	ui.Info("Generating infrastructure certificates...")
@@ -98,7 +98,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Write default .env if it doesn't exist
 	envPath := config.EnvFilePath()
 	if _, err := os.Stat(envPath); os.IsNotExist(err) {
-		os.WriteFile(envPath, []byte(fmt.Sprintf("DNS_PORT=%s\n", config.DNSPort())), 0644)
+		_ = os.WriteFile(envPath, []byte(fmt.Sprintf("DNS_PORT=%s\n", config.DNSPort())), 0644)
 	}
 
 	ui.Ok("Initialization complete!")
@@ -135,7 +135,7 @@ func importFrom(srcDir string) error {
 				continue
 			}
 			dest := filepath.Join(config.CertsDir(), e.Name())
-			os.WriteFile(dest, data, 0600)
+			_ = os.WriteFile(dest, data, 0600)
 		}
 		ui.Ok("Imported certificates")
 	}
@@ -152,7 +152,7 @@ func importFrom(srcDir string) error {
 				continue
 			}
 			dest := filepath.Join(config.DynamicDir(), e.Name())
-			os.WriteFile(dest, data, 0644)
+			_ = os.WriteFile(dest, data, 0644)
 		}
 		ui.Ok("Imported dynamic configs")
 	}

@@ -95,7 +95,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 			fmt.Fprintln(os.Stderr, "Core infrastructure is not running.")
 			fmt.Fprint(os.Stderr, "Start it now? [Y/n] ")
 			var answer string
-			fmt.Scanln(&answer)
+			_, _ = fmt.Scanln(&answer)
 			if answer == "" || answer == "y" || answer == "Y" || answer == "yes" {
 				ui.Info("Starting core infrastructure...")
 				if err := compose.Up(ctx); err != nil {

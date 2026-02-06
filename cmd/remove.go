@@ -63,7 +63,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 		fmt.Fprint(os.Stderr, "Continue? [y/N] ")
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		if answer != "y" && answer != "Y" {
 			ui.Info("Cancelled.")
 			return nil

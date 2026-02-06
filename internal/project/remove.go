@@ -28,12 +28,12 @@ func Remove(ctx context.Context, name string, removeDir bool) error {
 	composeFile := filepath.Join(projectDir, "docker-compose.yaml")
 	if _, err := os.Stat(composeFile); err == nil {
 		ui.Info("Stopping project containers...")
-		compose.ProjectDown(ctx, projectDir, []string{composeFile})
+		_ = compose.ProjectDown(ctx, projectDir, []string{composeFile})
 	}
 
 	// Remove certs
 	ui.Info("Removing certs...")
-	compose.RemoveCerts(name)
+	_ = compose.RemoveCerts(name)
 
 	// Remove from registry
 	ui.Info("Removing from registry...")

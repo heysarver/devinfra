@@ -155,7 +155,7 @@ func RunningContainers(ctx context.Context) (map[string][]string, error) {
 func CreateNetwork(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "docker", "network", "create", "traefik")
 	// Ignore error if network already exists
-	cmd.Run()
+	_ = cmd.Run()
 	return nil
 }
 

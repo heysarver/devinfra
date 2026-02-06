@@ -63,26 +63,26 @@ func PrintTable(headers []string, rows [][]string) {
 
 	// Print header
 	for i, h := range headers {
-		fmt.Fprintf(os.Stdout, "%-*s  ", widths[i], h)
+		_, _ = fmt.Fprintf(os.Stdout, "%-*s  ", widths[i], h)
 	}
-	fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout)
 
 	// Print separator
 	for i := range headers {
 		for j := 0; j < widths[i]; j++ {
-			fmt.Fprint(os.Stdout, "-")
+			_, _ = fmt.Fprint(os.Stdout, "-")
 		}
-		fmt.Fprint(os.Stdout, "  ")
+		_, _ = fmt.Fprint(os.Stdout, "  ")
 	}
-	fmt.Fprintln(os.Stdout)
+	_, _ = fmt.Fprintln(os.Stdout)
 
 	// Print rows
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < len(widths) {
-				fmt.Fprintf(os.Stdout, "%-*s  ", widths[i], cell)
+				_, _ = fmt.Fprintf(os.Stdout, "%-*s  ", widths[i], cell)
 			}
 		}
-		fmt.Fprintln(os.Stdout)
+		_, _ = fmt.Fprintln(os.Stdout)
 	}
 }

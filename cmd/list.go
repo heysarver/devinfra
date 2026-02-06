@@ -80,13 +80,12 @@ func discoverFlavors() []string {
 
 	// Walk the embedded templates directory for flavor files
 	root := filepath.Join("embed", "templates", "flavors")
-	fs.WalkDir(embeddedTemplatesFS, root, func(path string, d fs.DirEntry, err error) error {
+	_ = fs.WalkDir(embeddedTemplatesFS, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
 		name := d.Name()
-		if strings.HasSuffix(name, ".yaml.tpl") {
-			flavor := strings.TrimSuffix(name, ".yaml.tpl")
+		if flavor, ok := strings.CutSuffix(name, ".yaml.tpl"); ok {
 			flavors = append(flavors, flavor)
 		}
 		return nil

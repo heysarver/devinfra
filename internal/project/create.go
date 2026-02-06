@@ -76,7 +76,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 			return fmt.Errorf("generating host config: %w", err)
 		}
 		rb.add(func() error {
-			os.Remove(filepath.Join(config.DynamicDir(), fmt.Sprintf("host-%s.yaml", opts.Name)))
+			_ = os.Remove(filepath.Join(config.DynamicDir(), fmt.Sprintf("host-%s.yaml", opts.Name)))
 			return nil
 		})
 	} else {
@@ -102,7 +102,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		return fmt.Errorf("generating certs: %w", err)
 	}
 	rb.add(func() error {
-		compose.RemoveCerts(opts.Name)
+		_ = compose.RemoveCerts(opts.Name)
 		return nil
 	})
 
@@ -132,8 +132,8 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	rb.add(func() error {
 		reg, _ := config.LoadRegistry()
 		if reg != nil {
-			reg.Remove(opts.Name)
-			config.SaveRegistry(reg)
+			_ = reg.Remove(opts.Name)
+			_ = config.SaveRegistry(reg)
 		}
 		return nil
 	})
@@ -189,10 +189,12 @@ func renderBaseTemplates(dir string, data templateData) error {
 			return fmt.Errorf("creating %s: %w", outPath, err)
 		}
 		if err := tmpl.Execute(f, data); err != nil {
-			f.Close()
+			_ = f.Close()
 			return fmt.Errorf("executing template %s: %w", entry.Name(), err)
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("closing %s: %w", outPath, err)
+		}
 	}
 
 	return nil
@@ -215,7 +217,7 @@ func renderFlavor(dir, flavor string, data templateData) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return tmpl.Execute(f, data)
 }
@@ -325,11 +327,11 @@ func generateReadme(name, dir string, services []config.Service) {
 	b.WriteString("di doctor  # Verify everything works\n")
 	b.WriteString("```\n")
 
-	os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
 }
 
 func randomPassword(length int) string {
 	b := make([]byte, length/2+1)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)[:length]
 }

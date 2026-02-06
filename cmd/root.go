@@ -30,7 +30,7 @@ var rootCmd = &cobra.Command{
 
 		// Apply --config-dir
 		if flagConfigDir != "" {
-			os.Setenv("DEVINFRA_HOME", flagConfigDir)
+			_ = os.Setenv("DEVINFRA_HOME", flagConfigDir)
 		}
 
 		// Skip init check for commands that don't need config
