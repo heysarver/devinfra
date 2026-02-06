@@ -33,10 +33,11 @@ builds:
 
 archives:
   - id: devinfra
-    builds:
+    ids:
       - devinfra
       - di
-    format: tar.gz
+    formats:
+      - tar.gz
     name_template: "devinfra_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -48,19 +49,3 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
-
-brews:
-  - name: devinfra
-    ids:
-      - devinfra
-    repository:
-      owner: heysarver
-      name: homebrew-tap
-    homepage: https://github.com/heysarver/devinfra
-    description: Local development infrastructure manager
-    license: MIT
-    install: |
-      bin.install "devinfra"
-      bin.install_symlink "devinfra" => "di"
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/devinfra version")

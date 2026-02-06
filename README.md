@@ -20,12 +20,6 @@ make install
 
 This puts both `devinfra` and `di` on your `$GOPATH/bin`. If `GOPATH/bin` is not in your `PATH`, it will be added to your shell config automatically.
 
-### Homebrew
-
-```bash
-brew install heysarver/tap/devinfra
-```
-
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) (with Docker Compose v2)
