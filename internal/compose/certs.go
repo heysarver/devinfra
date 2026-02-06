@@ -96,15 +96,15 @@ func RemoveCerts(name string) error {
 	for _, pattern := range patterns {
 		matches, _ := filepath.Glob(pattern)
 		for _, m := range matches {
-			os.Remove(m)
+			_ = os.Remove(m)
 		}
 	}
 
 	// Remove TLS config
-	os.Remove(filepath.Join(dynamicDir, fmt.Sprintf("tls-%s.yaml", name)))
+	_ = os.Remove(filepath.Join(dynamicDir, fmt.Sprintf("tls-%s.yaml", name)))
 
 	// Remove host config if present
-	os.Remove(filepath.Join(dynamicDir, fmt.Sprintf("host-%s.yaml", name)))
+	_ = os.Remove(filepath.Join(dynamicDir, fmt.Sprintf("host-%s.yaml", name)))
 
 	return nil
 }
