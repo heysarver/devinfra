@@ -217,7 +217,7 @@ func validateDir(dir string) error {
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
 		entries, _ := os.ReadDir(dir)
 		if len(entries) > 0 {
-			return fmt.Errorf("directory %q already exists and is not empty", dir)
+			return fmt.Errorf("directory %q already exists and is not empty; use 'di add %s' to import an existing project", dir, dir)
 		}
 	}
 

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,13 +14,14 @@ type Service struct {
 }
 
 type Project struct {
-	Name     string    `yaml:"name" json:"name"`
-	Dir      string    `yaml:"dir" json:"dir"`
-	Domain   string    `yaml:"domain" json:"domain"`
-	HostMode bool      `yaml:"host_mode" json:"host_mode"`
-	Services []Service `yaml:"services" json:"services"`
-	Flavors  []string  `yaml:"flavors,omitempty" json:"flavors,omitempty"`
-	Created  string    `yaml:"created_at" json:"created_at"`
+	Name        string    `yaml:"name" json:"name"`
+	Dir         string    `yaml:"dir" json:"dir"`
+	Domain      string    `yaml:"domain" json:"domain"`
+	HostMode    bool      `yaml:"host_mode" json:"host_mode"`
+	Services    []Service `yaml:"services" json:"services"`
+	Flavors     []string  `yaml:"flavors,omitempty" json:"flavors,omitempty"`
+	ComposeFile string    `yaml:"compose_file,omitempty" json:"compose_file,omitempty"`
+	Created     string    `yaml:"created_at" json:"created_at"`
 }
 
 type Registry struct {
@@ -45,7 +47,8 @@ func LoadRegistry() (*Registry, error) {
 	return &reg, nil
 }
 
-// SaveRegistry writes the registry to projects.yaml.
+// SaveRegistry writes the registry to projects.yaml using atomic write
+// (write to temp file, then rename) to prevent corruption on crash.
 func SaveRegistry(reg *Registry) error {
 	if err := EnsureDirs(); err != nil {
 		return fmt.Errorf("creating config directory: %w", err)
@@ -55,8 +58,29 @@ func SaveRegistry(reg *Registry) error {
 		return fmt.Errorf("marshaling registry: %w", err)
 	}
 	path := RegistryPath()
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".projects.yaml.tmp.*")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
 		return fmt.Errorf("writing registry: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("syncing registry: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("renaming registry: %w", err)
 	}
 	return nil
 }
@@ -110,4 +134,30 @@ func (r *Registry) HasPort(port int) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// HasDir returns the project name if any project is registered at the given directory.
+func (r *Registry) HasDir(dir string) (string, bool) {
+	canon, _ := CanonicalPath(dir)
+	for _, p := range r.Projects {
+		pCanon, _ := CanonicalPath(p.Dir)
+		if canon == pCanon {
+			return p.Name, true
+		}
+	}
+	return "", false
+}
+
+// CanonicalPath resolves symlinks and returns a clean absolute path.
+func CanonicalPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		// Directory may not exist yet (e.g., clone target)
+		return filepath.Clean(abs), nil
+	}
+	return filepath.Clean(resolved), nil
 }

@@ -118,7 +118,18 @@ func runUp(cmd *cobra.Command, args []string) error {
 }
 
 func composeFilesForProject(p config.Project) []string {
-	files := []string{filepath.Join(p.Dir, "docker-compose.yaml")}
+	base := "docker-compose.yaml"
+	if p.ComposeFile != "" {
+		base = p.ComposeFile
+	}
+	files := []string{filepath.Join(p.Dir, base)}
+
+	// Include devinfra overlay if it exists
+	devinfra := filepath.Join(p.Dir, "docker-compose.devinfra.yaml")
+	if _, err := os.Stat(devinfra); err == nil {
+		files = append(files, devinfra)
+	}
+
 	for _, f := range p.Flavors {
 		files = append(files, filepath.Join(p.Dir, fmt.Sprintf("docker-compose.%s.yaml", f)))
 	}
