@@ -18,6 +18,7 @@ var (
 	flagNewMode     string
 	flagNewServices string
 	flagNewFlavors  string
+	flagNewType     string
 )
 
 var newCmd = &cobra.Command{
@@ -29,7 +30,10 @@ Interactive mode (wizard):
   di new
 
 Non-interactive mode:
-  di new --name myapp --dir ~/projects/myapp --services web:3000,api:8080 --flavors postgres`,
+  di new --name myapp --dir ~/projects/myapp --services web:3000,api:8080 --flavors postgres
+
+WordPress project:
+  di new --type wordpress --name myblog --dir ~/projects/myblog`,
 	GroupID: "project",
 	RunE:   runNew,
 }
@@ -40,8 +44,12 @@ func init() {
 	newCmd.Flags().StringVar(&flagNewMode, "mode", "docker", "mode: docker or host")
 	newCmd.Flags().StringVar(&flagNewServices, "services", "", "services as name:port pairs (e.g., web:3000,api:8080)")
 	newCmd.Flags().StringVar(&flagNewFlavors, "flavors", "", "comma-separated flavors (e.g., postgres,redis)")
+	newCmd.Flags().StringVar(&flagNewType, "type", "", "project type preset (e.g., wordpress)")
 	rootCmd.AddCommand(newCmd)
 }
+
+// validPresets lists the supported project type presets.
+var validPresets = []string{"wordpress"}
 
 func runNew(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
@@ -49,11 +57,35 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// Set TemplatesFS for project package
 	project.TemplatesFS = embeddedTemplatesFS
 
+	// Validate --type if provided
+	if flagNewType != "" {
+		found := false
+		for _, p := range validPresets {
+			if p == flagNewType {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("unknown project type %q; available: %s", flagNewType, strings.Join(validPresets, ", "))
+		}
+	}
+
+	// Validate flag interactions for presets
+	if flagNewType != "" {
+		if flagNewServices != "" {
+			return fmt.Errorf("--type and --services cannot be combined; --type %s defines its own services", flagNewType)
+		}
+		if strings.ToLower(flagNewMode) == "host" {
+			return fmt.Errorf("--type %s requires Docker mode", flagNewType)
+		}
+	}
+
 	// Determine interactive vs non-interactive
 	if flagNewName == "" && flagNewDir == "" {
 		// Interactive wizard mode
 		flavors := discoverFlavors()
-		result, err := ui.RunWizard(flavors)
+		result, err := ui.RunWizard(flavors, flagNewType)
 		if err != nil {
 			if err.Error() == "cancelled" {
 				fmt.Fprintln(os.Stderr, "Cancelled.")
@@ -62,13 +94,15 @@ func runNew(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		return project.Create(ctx, project.CreateOpts{
+		opts := project.CreateOpts{
 			Name:     result.Name,
 			Dir:      result.Dir,
 			HostMode: result.HostMode,
 			Services: result.Services,
 			Flavors:  result.Flavors,
-		})
+		}
+		applyPreset(&opts, flagNewType)
+		return project.Create(ctx, opts)
 	}
 
 	// Non-interactive mode: both name and dir required
@@ -138,13 +172,29 @@ func runNew(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return project.Create(ctx, project.CreateOpts{
+	opts := project.CreateOpts{
 		Name:     flagNewName,
 		Dir:      dir,
 		HostMode: hostMode,
 		Services: services,
 		Flavors:  flavors,
-	})
+	}
+	applyPreset(&opts, flagNewType)
+	return project.Create(ctx, opts)
+}
+
+// applyPreset configures CreateOpts based on the project type preset.
+func applyPreset(opts *project.CreateOpts, preset string) {
+	switch preset {
+	case "wordpress":
+		opts.Preset = "wordpress"
+		opts.Services = []config.Service{{Name: "wordpress", Port: 80}}
+		opts.HostMode = false
+		opts.Scaffolding = []string{
+			"wp-content/themes",
+			"wp-content/plugins",
+		}
+	}
 }
 
 func parseServices(s string) ([]config.Service, error) {
