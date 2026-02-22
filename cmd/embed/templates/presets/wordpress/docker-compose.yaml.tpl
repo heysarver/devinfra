@@ -20,7 +20,7 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.{{.ProjectName}}-wordpress.rule=Host(`{{.ProjectName}}.test`) || Host(`wordpress.{{.ProjectName}}.test`)"
+      - "traefik.http.routers.{{.ProjectName}}-wordpress.rule=Host(`{{.ProjectName}}.test`) || Host(`www.{{.ProjectName}}.test`)"
       - "traefik.http.routers.{{.ProjectName}}-wordpress.entrypoints=websecure"
       - "traefik.http.routers.{{.ProjectName}}-wordpress.tls=true"
       - "traefik.http.services.{{.ProjectName}}-wordpress.loadbalancer.server.port=80"
