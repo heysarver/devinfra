@@ -24,6 +24,27 @@ type Project struct {
 	Created     string    `yaml:"created_at" json:"created_at"`
 }
 
+// ComposeFiles returns the full list of compose files for this project,
+// including the base compose file, devinfra overlay, and flavor overlays.
+func (p Project) ComposeFiles() []string {
+	base := "docker-compose.yaml"
+	if p.ComposeFile != "" {
+		base = p.ComposeFile
+	}
+	files := []string{filepath.Join(p.Dir, base)}
+
+	// Include devinfra overlay if it exists
+	devinfra := filepath.Join(p.Dir, "docker-compose.devinfra.yaml")
+	if _, err := os.Stat(devinfra); err == nil {
+		files = append(files, devinfra)
+	}
+
+	for _, f := range p.Flavors {
+		files = append(files, filepath.Join(p.Dir, fmt.Sprintf("docker-compose.%s.yaml", f)))
+	}
+	return files
+}
+
 type Registry struct {
 	Projects []Project `yaml:"projects"`
 }

@@ -38,6 +38,6 @@ func runLogs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("project %q not found in registry", name)
 	}
 
-	files := composeFilesForProject(*p)
+	files := p.ComposeFiles()
 	return compose.ProjectLogs(ctx, p.Dir, files)
 }

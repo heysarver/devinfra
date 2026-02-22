@@ -19,7 +19,8 @@ type WizardResult struct {
 }
 
 // RunWizard launches the interactive project creation wizard.
-func RunWizard(availableFlavors []string) (*WizardResult, error) {
+// If preset is non-empty (e.g., "wordpress"), the wizard skips mode and service prompts.
+func RunWizard(availableFlavors []string, preset string) (*WizardResult, error) {
 	result := &WizardResult{}
 
 	// Step 1: Name
@@ -72,38 +73,42 @@ func RunWizard(availableFlavors []string) (*WizardResult, error) {
 	}
 	result.Dir = expandPath(result.Dir)
 
-	// Step 3: Mode
-	modeStr := "docker"
-	modeSelect := huh.NewSelect[string]().
-		Title("Mode").
-		Options(
-			huh.NewOption("docker — services run in Docker containers", "docker"),
-			huh.NewOption("host — services run on your host machine", "host"),
-		).
-		Value(&modeStr)
+	// Step 3: Mode (skip for presets — forced to docker)
+	if preset == "" {
+		modeStr := "docker"
+		modeSelect := huh.NewSelect[string]().
+			Title("Mode").
+			Options(
+				huh.NewOption("docker — services run in Docker containers", "docker"),
+				huh.NewOption("host — services run on your host machine", "host"),
+			).
+			Value(&modeStr)
 
-	if err := huh.NewForm(huh.NewGroup(modeSelect)).Run(); err != nil {
-		return nil, err
+		if err := huh.NewForm(huh.NewGroup(modeSelect)).Run(); err != nil {
+			return nil, err
+		}
+		result.HostMode = modeStr == "host"
 	}
-	result.HostMode = modeStr == "host"
 
-	// Step 4: Services
-	services, err := promptServices()
-	if err != nil {
-		return nil, err
+	// Step 4: Services (skip for presets — services are pre-defined)
+	if preset == "" {
+		services, err := promptServices()
+		if err != nil {
+			return nil, err
+		}
+		result.Services = services
 	}
-	result.Services = services
 
 	// Step 5: Flavors
 	if len(availableFlavors) > 0 {
-		// Filter out flavors that collide with service names
+		// Filter out flavors that collide with service names or the preset name
 		var validFlavors []string
 		svcNames := make(map[string]bool)
 		for _, svc := range result.Services {
 			svcNames[svc.Name] = true
 		}
 		for _, f := range availableFlavors {
-			if !svcNames[f] {
+			if !svcNames[f] && f != preset {
 				validFlavors = append(validFlavors, f)
 			}
 		}
@@ -129,7 +134,7 @@ func RunWizard(availableFlavors []string) (*WizardResult, error) {
 
 	// Step 6: Confirmation
 	var confirmed bool
-	summary := buildSummary(result)
+	summary := buildSummary(result, preset)
 
 	confirmInput := huh.NewConfirm().
 		Title("Create project?").
@@ -241,16 +246,20 @@ func promptServices() ([]config.Service, error) {
 	return services, nil
 }
 
-func buildSummary(r *WizardResult) string {
+func buildSummary(r *WizardResult, preset string) string {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("Name:      %s\n", r.Name))
 	b.WriteString(fmt.Sprintf("Directory: %s\n", r.Dir))
-	mode := "docker"
-	if r.HostMode {
-		mode = "host"
+	if preset != "" {
+		b.WriteString(fmt.Sprintf("Type:      %s\n", preset))
+	} else {
+		mode := "docker"
+		if r.HostMode {
+			mode = "host"
+		}
+		b.WriteString(fmt.Sprintf("Mode:      %s\n", mode))
 	}
-	b.WriteString(fmt.Sprintf("Mode:      %s\n", mode))
 	b.WriteString("\nServices:\n")
 	for i, svc := range r.Services {
 		if i == 0 {

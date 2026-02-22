@@ -23,11 +23,13 @@ import (
 var TemplatesFS embed.FS
 
 type CreateOpts struct {
-	Name     string
-	Dir      string
-	HostMode bool
-	Services []config.Service
-	Flavors  []string
+	Name        string
+	Dir         string
+	HostMode    bool
+	Services    []config.Service
+	Flavors     []string
+	Preset      string   // e.g., "wordpress" — overrides image and compose generation
+	Scaffolding []string // directories to create with .gitkeep (e.g., "wp-content/themes/")
 }
 
 type templateData struct {
@@ -35,6 +37,7 @@ type templateData struct {
 	PostgresPassword string
 	RabbitmqPassword string
 	MinioPassword    string
+	MysqlPassword    string
 }
 
 func Create(ctx context.Context, opts CreateOpts) error {
@@ -61,6 +64,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		PostgresPassword: randomPassword(24),
 		RabbitmqPassword: randomPassword(24),
 		MinioPassword:    randomPassword(24),
+		MysqlPassword:    randomPassword(24),
 	}
 
 	// Render base templates (Makefile, .env.example)
@@ -79,6 +83,11 @@ func Create(ctx context.Context, opts CreateOpts) error {
 			_ = os.Remove(filepath.Join(config.DynamicDir(), fmt.Sprintf("host-%s.yaml", opts.Name)))
 			return nil
 		})
+	} else if opts.Preset != "" {
+		ui.Info("Generating %s docker-compose.yaml...", opts.Preset)
+		if err := renderPresetCompose(dir, opts.Preset, data); err != nil {
+			return fmt.Errorf("generating preset compose: %w", err)
+		}
 	} else {
 		ui.Info("Generating docker-compose.yaml...")
 		if err := generateDockerCompose(opts.Name, dir, opts.Services); err != nil {
@@ -86,8 +95,24 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		}
 	}
 
+	// Create scaffold directories
+	for _, scaffold := range opts.Scaffolding {
+		scaffoldDir := filepath.Join(dir, scaffold)
+		if err := os.MkdirAll(scaffoldDir, 0755); err != nil {
+			return fmt.Errorf("creating scaffold directory %s: %w", scaffold, err)
+		}
+		gitkeep := filepath.Join(scaffoldDir, ".gitkeep")
+		if err := os.WriteFile(gitkeep, nil, 0644); err != nil {
+			return fmt.Errorf("creating .gitkeep in %s: %w", scaffold, err)
+		}
+	}
+
 	// Generate README
-	generateReadme(opts.Name, dir, opts.Services)
+	if opts.Preset == "wordpress" {
+		generateWordPressReadme(opts.Name, dir)
+	} else {
+		generateReadme(opts.Name, dir, opts.Services)
+	}
 
 	// Render flavor overlays
 	for _, flavor := range opts.Flavors {
@@ -157,6 +182,10 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	fmt.Fprintf(os.Stderr, "  cd %s\n", dir)
 	fmt.Fprintln(os.Stderr, "  make up     # Start project")
 	fmt.Fprintln(os.Stderr, "  make logs   # Tail logs")
+	if opts.Preset == "wordpress" {
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/wp-admin/install.php to complete WordPress setup.\n", opts.Name)
+	}
 
 	return nil
 }
@@ -320,6 +349,59 @@ func generateReadme(name, dir string, services []config.Service) {
 		}
 		b.WriteString(fmt.Sprintf("- https://%s.%s.test\n", svc.Name, name))
 	}
+	b.WriteString("\n## Infrastructure\n\n")
+	b.WriteString("This project uses [devinfra](https://github.com/heysarver/devinfra) for local development infrastructure.\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("di up      # Start infrastructure\n")
+	b.WriteString("di doctor  # Verify everything works\n")
+	b.WriteString("```\n")
+
+	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+}
+
+func renderPresetCompose(dir, preset string, data templateData) error {
+	presetPath := filepath.Join("embed", "templates", "presets", preset, "docker-compose.yaml.tpl")
+	content, err := fs.ReadFile(TemplatesFS, presetPath)
+	if err != nil {
+		return fmt.Errorf("preset %q not found", preset)
+	}
+
+	tmpl, err := template.New(preset).Parse(string(content))
+	if err != nil {
+		return fmt.Errorf("parsing preset template: %w", err)
+	}
+
+	outPath := filepath.Join(dir, "docker-compose.yaml")
+	f, err := os.Create(outPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	return tmpl.Execute(f, data)
+}
+
+func generateWordPressReadme(name, dir string) {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("# %s\n\n", name))
+	b.WriteString("## Quick Start\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("make up      # Start WordPress + MySQL\n")
+	b.WriteString("make down    # Stop project\n")
+	b.WriteString("make logs    # Tail logs\n")
+	b.WriteString("make ps      # Show containers\n")
+	b.WriteString("```\n\n")
+	b.WriteString("## WordPress Setup\n\n")
+	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.test/wp-admin/install.php to complete the WordPress installation.\n\n", name))
+	b.WriteString("## URLs\n\n")
+	b.WriteString(fmt.Sprintf("- https://%s.test (WordPress)\n", name))
+	b.WriteString(fmt.Sprintf("- https://wordpress.%s.test (WordPress)\n", name))
+	b.WriteString("\n## Development\n\n")
+	b.WriteString("Theme and plugin files are in `wp-content/`:\n\n")
+	b.WriteString("- `wp-content/themes/` — Custom themes\n")
+	b.WriteString("- `wp-content/plugins/` — Custom plugins\n")
+	b.WriteString("\nThese directories are bind-mounted into the WordPress container.\n")
 	b.WriteString("\n## Infrastructure\n\n")
 	b.WriteString("This project uses [devinfra](https://github.com/heysarver/devinfra) for local development infrastructure.\n\n")
 	b.WriteString("```bash\n")
