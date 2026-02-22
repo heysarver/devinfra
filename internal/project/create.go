@@ -35,6 +35,7 @@ type templateData struct {
 	PostgresPassword string
 	RabbitmqPassword string
 	MinioPassword    string
+	MysqlPassword    string
 }
 
 func Create(ctx context.Context, opts CreateOpts) error {
@@ -61,6 +62,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		PostgresPassword: randomPassword(24),
 		RabbitmqPassword: randomPassword(24),
 		MinioPassword:    randomPassword(24),
+		MysqlPassword:    randomPassword(24),
 	}
 
 	// Render base templates (Makefile, .env.example)

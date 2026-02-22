@@ -39,6 +39,7 @@ func AddFlavor(name, flavor string) error {
 		PostgresPassword: randomPassword(24),
 		RabbitmqPassword: randomPassword(24),
 		MinioPassword:    randomPassword(24),
+		MysqlPassword:    randomPassword(24),
 	}
 
 	ui.Info("Adding flavor '%s' to project '%s'...", flavor, name)
