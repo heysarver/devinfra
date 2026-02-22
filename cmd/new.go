@@ -188,7 +188,7 @@ func applyPreset(opts *project.CreateOpts, preset string) {
 	switch preset {
 	case "wordpress":
 		opts.Preset = "wordpress"
-		opts.Services = []config.Service{{Name: "wordpress", Port: 80}}
+		opts.Services = []config.Service{{Name: "www", Port: 80}}
 		opts.HostMode = false
 		opts.Scaffolding = []string{
 			"wp-content/themes",

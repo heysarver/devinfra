@@ -396,7 +396,7 @@ func generateWordPressReadme(name, dir string) {
 	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.test/wp-admin/install.php to complete the WordPress installation.\n\n", name))
 	b.WriteString("## URLs\n\n")
 	b.WriteString(fmt.Sprintf("- https://%s.test (WordPress)\n", name))
-	b.WriteString(fmt.Sprintf("- https://wordpress.%s.test (WordPress)\n", name))
+	b.WriteString(fmt.Sprintf("- https://www.%s.test (WordPress)\n", name))
 	b.WriteString("\n## Development\n\n")
 	b.WriteString("Theme and plugin files are in `wp-content/`:\n\n")
 	b.WriteString("- `wp-content/themes/` — Custom themes\n")
