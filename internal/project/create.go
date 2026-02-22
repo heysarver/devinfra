@@ -73,6 +73,11 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		return fmt.Errorf("rendering templates: %w", err)
 	}
 
+	// When an entrypoint flavor is present, it replaces the default web service
+	if !opts.HostMode && opts.Preset == "" && hasEntrypointFlavor(opts.Flavors) {
+		opts.Services = entrypointServices(opts.Flavors)
+	}
+
 	// Generate docker-compose or host config
 	if opts.HostMode {
 		ui.Info("Generating host-mode Traefik config...")
@@ -87,6 +92,11 @@ func Create(ctx context.Context, opts CreateOpts) error {
 		ui.Info("Generating %s docker-compose.yaml...", opts.Preset)
 		if err := renderPresetCompose(dir, opts.Preset, data); err != nil {
 			return fmt.Errorf("generating preset compose: %w", err)
+		}
+	} else if hasEntrypointFlavor(opts.Flavors) {
+		ui.Info("Generating docker-compose.yaml (network only)...")
+		if err := generateNetworkOnlyCompose(opts.Name, dir); err != nil {
+			return fmt.Errorf("generating compose: %w", err)
 		}
 	} else {
 		ui.Info("Generating docker-compose.yaml...")
@@ -182,7 +192,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	fmt.Fprintf(os.Stderr, "  cd %s\n", dir)
 	fmt.Fprintln(os.Stderr, "  make up     # Start project")
 	fmt.Fprintln(os.Stderr, "  make logs   # Tail logs")
-	if opts.Preset == "wordpress" {
+	if opts.Preset == "wordpress" || hasFlavorInList(opts.Flavors, "wordpress") {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/wp-admin/install.php to complete WordPress setup.\n", opts.Name)
 	}
@@ -410,6 +420,46 @@ func generateWordPressReadme(name, dir string) {
 	b.WriteString("```\n")
 
 	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+}
+
+// entrypointFlavors are flavors that provide their own web-facing service,
+// replacing the default web service in the base compose.
+var entrypointFlavors = []string{"wordpress"}
+
+func hasEntrypointFlavor(flavors []string) bool {
+	for _, f := range flavors {
+		for _, e := range entrypointFlavors {
+			if f == e {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasFlavorInList(flavors []string, target string) bool {
+	for _, f := range flavors {
+		if f == target {
+			return true
+		}
+	}
+	return false
+}
+
+// entrypointServices returns the service list for the first matching entrypoint flavor.
+func entrypointServices(flavors []string) []config.Service {
+	for _, f := range flavors {
+		switch f {
+		case "wordpress":
+			return []config.Service{{Name: "www", Port: 80}}
+		}
+	}
+	return nil
+}
+
+func generateNetworkOnlyCompose(name, dir string) error {
+	content := fmt.Sprintf("networks:\n  traefik:\n    external: true\n  default:\n    name: %s\n", name)
+	return os.WriteFile(filepath.Join(dir, "docker-compose.yaml"), []byte(content), 0644)
 }
 
 func randomPassword(length int) string {
