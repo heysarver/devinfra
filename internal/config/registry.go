@@ -138,9 +138,15 @@ func (r *Registry) HasPort(port int) (string, bool) {
 
 // HasDir returns the project name if any project is registered at the given directory.
 func (r *Registry) HasDir(dir string) (string, bool) {
-	canon, _ := CanonicalPath(dir)
+	canon, err := CanonicalPath(dir)
+	if err != nil {
+		return "", false
+	}
 	for _, p := range r.Projects {
-		pCanon, _ := CanonicalPath(p.Dir)
+		pCanon, err := CanonicalPath(p.Dir)
+		if err != nil {
+			continue
+		}
 		if canon == pCanon {
 			return p.Name, true
 		}

@@ -61,6 +61,7 @@ const (
 // classifyInput determines if the argument is a git URL or local path.
 func classifyInput(arg string) inputType {
 	if strings.HasPrefix(arg, "git@") ||
+		strings.HasPrefix(arg, "git://") ||
 		strings.HasPrefix(arg, "https://") ||
 		strings.HasPrefix(arg, "http://") ||
 		strings.HasPrefix(arg, "ssh://") {
@@ -129,25 +130,31 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		// Determine clone destination
 		if flagAddDir != "" {
 			dir = expandDir(flagAddDir)
-		} else if flagYes {
-			dir = filepath.Join(os.Getenv("HOME"), "projects", derivedName)
 		} else {
-			defaultDir := filepath.Join(os.Getenv("HOME"), "projects", derivedName)
-			dir = defaultDir
-			dirInput := huh.NewInput().
-				Title("Clone to directory").
-				Placeholder(defaultDir).
-				Value(&dir).
-				Validate(func(s string) error {
-					if s == "" {
-						return fmt.Errorf("directory is required")
-					}
-					return nil
-				})
-			if err := huh.NewForm(huh.NewGroup(dirInput)).Run(); err != nil {
-				return err
+			home, err := os.UserHomeDir()
+			if err != nil || home == "" {
+				return fmt.Errorf("cannot determine home directory; use --dir to specify clone destination")
 			}
-			dir = expandDir(dir)
+			defaultDir := filepath.Join(home, "projects", derivedName)
+			if flagYes {
+				dir = defaultDir
+			} else {
+				dir = defaultDir
+				dirInput := huh.NewInput().
+					Title("Clone to directory").
+					Placeholder(defaultDir).
+					Value(&dir).
+					Validate(func(s string) error {
+						if s == "" {
+							return fmt.Errorf("directory is required")
+						}
+						return nil
+					})
+				if err := huh.NewForm(huh.NewGroup(dirInput)).Run(); err != nil {
+					return err
+				}
+				dir = expandDir(dir)
+			}
 		}
 
 		// Check if destination already exists
@@ -244,14 +251,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			ui.Warn("Could not parse compose file: %v", err)
 		} else {
-			selectedServices, err = promptServiceSelection(name, detected, reg)
+			selectedServices, err = promptServiceSelection(detected)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
 		ui.Info("No docker-compose file found")
-		selectedServices, err = promptNoCompose(name, reg)
+		selectedServices, err = promptNoCompose()
 		if err != nil {
 			return err
 		}
@@ -274,7 +281,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 }
 
 // promptServiceSelection shows detected services and lets the user pick which get routing.
-func promptServiceSelection(projectName string, detected []compose.DetectedService, reg *config.Registry) ([]config.Service, error) {
+func promptServiceSelection(detected []compose.DetectedService) ([]config.Service, error) {
 	// Sort services: those with ports first, then alphabetically
 	sort.Slice(detected, func(i, j int) bool {
 		if (detected[i].Port > 0) != (detected[j].Port > 0) {
@@ -348,7 +355,7 @@ func promptServiceSelection(projectName string, detected []compose.DetectedServi
 }
 
 // promptNoCompose handles the case where no compose file is found.
-func promptNoCompose(projectName string, reg *config.Registry) ([]config.Service, error) {
+func promptNoCompose() ([]config.Service, error) {
 	if flagYes {
 		// Non-interactive: register only, no routing
 		return nil, nil

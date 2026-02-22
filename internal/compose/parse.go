@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -67,6 +68,10 @@ func ParseServices(dir, composeFileName string) ([]DetectedService, error) {
 		}
 		services = append(services, DetectedService{Name: name, Port: port})
 	}
+
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].Name < services[j].Name
+	})
 
 	return services, nil
 }
