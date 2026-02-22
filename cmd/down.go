@@ -38,7 +38,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			ui.Info("Stopping %s...", p.Name)
-			files := composeFilesForProject(p)
+			files := p.ComposeFiles()
 			if err := compose.ProjectDown(ctx, p.Dir, files); err != nil {
 				ui.Warn("Failed to stop %s: %v", p.Name, err)
 			} else {
@@ -68,7 +68,7 @@ func runDown(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Info("Stopping %s...", name)
-	files := composeFilesForProject(*p)
+	files := p.ComposeFiles()
 	if err := compose.ProjectDown(ctx, p.Dir, files); err != nil {
 		return fmt.Errorf("stopping %s: %w", name, err)
 	}

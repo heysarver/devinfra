@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/heysarver/devinfra/internal/compose"
 	"github.com/heysarver/devinfra/internal/config"
@@ -24,11 +23,11 @@ func Remove(ctx context.Context, name string, removeDir bool) error {
 
 	projectDir := p.Dir
 
-	// Stop project containers
-	composeFile := filepath.Join(projectDir, "docker-compose.yaml")
-	if _, err := os.Stat(composeFile); err == nil {
+	// Stop project containers (include all compose files: base, devinfra overlay, flavors)
+	files := p.ComposeFiles()
+	if len(files) > 0 {
 		ui.Info("Stopping project containers...")
-		_ = compose.ProjectDown(ctx, projectDir, []string{composeFile})
+		_ = compose.ProjectDown(ctx, projectDir, files)
 	}
 
 	// Remove certs

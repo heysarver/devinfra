@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/heysarver/devinfra/internal/compose"
 	"github.com/heysarver/devinfra/internal/config"
@@ -52,7 +51,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			ui.Info("Starting %s...", p.Name)
-			files := composeFilesForProject(p)
+			files := p.ComposeFiles()
 			if err := compose.ProjectUp(ctx, p.Dir, files); err != nil {
 				ui.Warn("Failed to start %s: %v", p.Name, err)
 			} else {
@@ -109,7 +108,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 	}
 
 	ui.Info("Starting %s...", name)
-	files := composeFilesForProject(*p)
+	files := p.ComposeFiles()
 	if err := compose.ProjectUp(ctx, p.Dir, files); err != nil {
 		return fmt.Errorf("starting %s: %w", name, err)
 	}
@@ -117,24 +116,6 @@ func runUp(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func composeFilesForProject(p config.Project) []string {
-	base := "docker-compose.yaml"
-	if p.ComposeFile != "" {
-		base = p.ComposeFile
-	}
-	files := []string{filepath.Join(p.Dir, base)}
-
-	// Include devinfra overlay if it exists
-	devinfra := filepath.Join(p.Dir, "docker-compose.devinfra.yaml")
-	if _, err := os.Stat(devinfra); err == nil {
-		files = append(files, devinfra)
-	}
-
-	for _, f := range p.Flavors {
-		files = append(files, filepath.Join(p.Dir, fmt.Sprintf("docker-compose.%s.yaml", f)))
-	}
-	return files
-}
 
 func projectNameCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
