@@ -51,12 +51,19 @@ func Create(ctx context.Context, opts CreateOpts) error {
 
 	dir := opts.Dir
 
+	// Track whether the directory already existed so rollback doesn't
+	// delete a pre-existing directory that contained the user's files.
+	_, statErr := os.Stat(dir)
+	dirExisted := statErr == nil
+
 	// Create project directory
 	ui.Info("Creating project directory: %s", dir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	rb.add(func() error { return os.RemoveAll(dir) })
+	if !dirExisted {
+		rb.add(func() error { return os.RemoveAll(dir) })
+	}
 
 	// Prepare template data
 	data := templateData{
@@ -94,9 +101,14 @@ func Create(ctx context.Context, opts CreateOpts) error {
 			return fmt.Errorf("generating preset compose: %w", err)
 		}
 	} else if hasEntrypointFlavor(opts.Flavors) {
-		ui.Info("Generating docker-compose.yaml (network only)...")
-		if err := generateNetworkOnlyCompose(opts.Name, dir); err != nil {
-			return fmt.Errorf("generating compose: %w", err)
+		composePath := filepath.Join(dir, "docker-compose.yaml")
+		if _, err := os.Stat(composePath); err == nil {
+			ui.Info("Skipping existing file: docker-compose.yaml")
+		} else {
+			ui.Info("Generating docker-compose.yaml (network only)...")
+			if err := generateNetworkOnlyCompose(opts.Name, dir); err != nil {
+				return fmt.Errorf("generating compose: %w", err)
+			}
 		}
 	} else {
 		ui.Info("Generating docker-compose.yaml...")
@@ -129,6 +141,11 @@ func Create(ctx context.Context, opts CreateOpts) error {
 
 	// Render flavor overlays
 	for _, flavor := range opts.Flavors {
+		flavorFile := fmt.Sprintf("docker-compose.%s.yaml", flavor)
+		if _, err := os.Stat(filepath.Join(dir, flavorFile)); err == nil {
+			ui.Info("Skipping existing file: %s", flavorFile)
+			continue
+		}
 		ui.Info("  Adding flavor: %s", flavor)
 		if err := renderFlavor(dir, flavor, data); err != nil {
 			return fmt.Errorf("rendering flavor %s: %w", flavor, err)
@@ -207,6 +224,15 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	return nil
 }
 
+// writeFileIfNotExists writes content to path only if the file does not
+// already exist. Returns true if the file was skipped (already existed).
+func writeFileIfNotExists(path string, content []byte, perm os.FileMode) (bool, error) {
+	if _, err := os.Stat(path); err == nil {
+		return true, nil // skipped
+	}
+	return false, os.WriteFile(path, content, perm)
+}
+
 func renderBaseTemplates(dir string, data templateData) error {
 	baseDir := filepath.Join("embed", "templates", "base")
 	entries, err := fs.ReadDir(TemplatesFS, baseDir)
@@ -230,6 +256,13 @@ func renderBaseTemplates(dir string, data templateData) error {
 		}
 
 		outPath := filepath.Join(dir, outName)
+
+		// Skip if file already exists
+		if _, statErr := os.Stat(outPath); statErr == nil {
+			ui.Info("Skipping existing file: %s", outName)
+			continue
+		}
+
 		f, err := os.Create(outPath)
 		if err != nil {
 			return fmt.Errorf("creating %s: %w", outPath, err)
@@ -269,6 +302,12 @@ func renderFlavor(dir, flavor string, data templateData) error {
 }
 
 func generateDockerCompose(name, dir string, services []config.Service) error {
+	outPath := filepath.Join(dir, "docker-compose.yaml")
+	if _, err := os.Stat(outPath); err == nil {
+		ui.Info("Skipping existing file: docker-compose.yaml")
+		return nil
+	}
+
 	var b strings.Builder
 
 	b.WriteString("services:\n")
@@ -303,7 +342,7 @@ func generateDockerCompose(name, dir string, services []config.Service) error {
 	b.WriteString("  default:\n")
 	b.WriteString(fmt.Sprintf("    name: %s\n", name))
 
-	return os.WriteFile(filepath.Join(dir, "docker-compose.yaml"), []byte(b.String()), 0644)
+	return os.WriteFile(outPath, []byte(b.String()), 0644)
 }
 
 func generateHostConfig(name, dir string, services []config.Service) error {
@@ -344,11 +383,22 @@ func generateHostConfig(name, dir string, services []config.Service) error {
 	}
 
 	// Host-mode compose: just the network
-	composeContent := fmt.Sprintf("networks:\n  default:\n    name: %s\n", name)
-	return os.WriteFile(filepath.Join(dir, "docker-compose.yaml"), []byte(composeContent), 0644)
+	composePath := filepath.Join(dir, "docker-compose.yaml")
+	if skipped, err := writeFileIfNotExists(composePath, []byte(fmt.Sprintf("networks:\n  default:\n    name: %s\n", name)), 0644); skipped {
+		ui.Info("Skipping existing file: docker-compose.yaml")
+		return nil
+	} else {
+		return err
+	}
 }
 
 func generateReadme(name, dir string, services []config.Service) {
+	outPath := filepath.Join(dir, "README.md")
+	if _, err := os.Stat(outPath); err == nil {
+		ui.Info("Skipping existing file: README.md")
+		return
+	}
+
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -373,10 +423,16 @@ func generateReadme(name, dir string, services []config.Service) {
 	b.WriteString("di doctor  # Verify everything works\n")
 	b.WriteString("```\n")
 
-	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+	_ = os.WriteFile(outPath, []byte(b.String()), 0644)
 }
 
 func renderPresetCompose(dir, preset string, data templateData) error {
+	outPath := filepath.Join(dir, "docker-compose.yaml")
+	if _, err := os.Stat(outPath); err == nil {
+		ui.Info("Skipping existing file: docker-compose.yaml")
+		return nil
+	}
+
 	presetPath := filepath.Join("embed", "templates", "presets", preset, "docker-compose.yaml.tpl")
 	content, err := fs.ReadFile(TemplatesFS, presetPath)
 	if err != nil {
@@ -388,7 +444,6 @@ func renderPresetCompose(dir, preset string, data templateData) error {
 		return fmt.Errorf("parsing preset template: %w", err)
 	}
 
-	outPath := filepath.Join(dir, "docker-compose.yaml")
 	f, err := os.Create(outPath)
 	if err != nil {
 		return err
@@ -399,6 +454,12 @@ func renderPresetCompose(dir, preset string, data templateData) error {
 }
 
 func generateWordPressReadme(name, dir string) {
+	outPath := filepath.Join(dir, "README.md")
+	if _, err := os.Stat(outPath); err == nil {
+		ui.Info("Skipping existing file: README.md")
+		return
+	}
+
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -426,10 +487,16 @@ func generateWordPressReadme(name, dir string) {
 	b.WriteString("di doctor  # Verify everything works\n")
 	b.WriteString("```\n")
 
-	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+	_ = os.WriteFile(outPath, []byte(b.String()), 0644)
 }
 
 func generateGhostReadme(name, dir string) {
+	outPath := filepath.Join(dir, "README.md")
+	if _, err := os.Stat(outPath); err == nil {
+		ui.Info("Skipping existing file: README.md")
+		return
+	}
+
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -446,6 +513,11 @@ func generateGhostReadme(name, dir string) {
 	b.WriteString(fmt.Sprintf("- https://%s.test (Ghost)\n", name))
 	b.WriteString(fmt.Sprintf("- https://www.%s.test (Ghost)\n", name))
 	b.WriteString(fmt.Sprintf("- https://%s.test/ghost/ (Admin panel)\n", name))
+	b.WriteString("\n## Development\n\n")
+	b.WriteString("Ghost content files are in `content/`:\n\n")
+	b.WriteString("- `content/themes/` — Custom themes\n")
+	b.WriteString("- `content/images/` — Uploaded images\n")
+	b.WriteString("\nThis directory is bind-mounted into the Ghost container.\n")
 	b.WriteString("\n## Infrastructure\n\n")
 	b.WriteString("This project uses [devinfra](https://github.com/heysarver/devinfra) for local development infrastructure.\n\n")
 	b.WriteString("```bash\n")
@@ -453,7 +525,7 @@ func generateGhostReadme(name, dir string) {
 	b.WriteString("di doctor  # Verify everything works\n")
 	b.WriteString("```\n")
 
-	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+	_ = os.WriteFile(outPath, []byte(b.String()), 0644)
 }
 
 // entrypointFlavors are flavors that provide their own web-facing service,

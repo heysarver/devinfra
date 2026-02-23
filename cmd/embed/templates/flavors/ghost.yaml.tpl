@@ -10,7 +10,7 @@ services:
       database__connection__password: {{.MysqlPassword}}
       database__connection__database: ghost
     volumes:
-      - ghost_content:/var/lib/ghost/content
+      - ./content:/var/lib/ghost/content
     depends_on:
       mysql:
         condition: service_healthy
@@ -48,5 +48,4 @@ networks:
     external: true
 
 volumes:
-  ghost_content:
   mysql_data:
