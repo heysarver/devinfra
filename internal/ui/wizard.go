@@ -59,10 +59,16 @@ func RunWizard(availableFlavors []string, preset string) (*WizardResult, error) 
 				return fmt.Errorf("directory is required")
 			}
 			expanded := expandPath(s)
+			// Reject sensitive system directories
+			for _, sens := range config.SensitiveDirs {
+				if strings.HasPrefix(expanded, sens) {
+					return fmt.Errorf("cannot create project in system directory: %s", sens)
+				}
+			}
+			// If directory exists, check for app indicator files
 			if info, err := os.Stat(expanded); err == nil && info.IsDir() {
-				entries, _ := os.ReadDir(expanded)
-				if len(entries) > 0 {
-					return fmt.Errorf("directory already exists and is not empty")
+				if indicator, found := config.FindAppIndicator(expanded); found {
+					return fmt.Errorf("directory looks like an existing project (found %s); use 'di add' instead", indicator)
 				}
 			}
 			return nil

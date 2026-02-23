@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 )
@@ -67,3 +69,26 @@ func ParsePort(s string) (int, error) {
 	}
 	return port, nil
 }
+
+// AppIndicatorFiles are filenames whose presence suggests a directory
+// already contains an application project.
+var AppIndicatorFiles = []string{
+	"docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml",
+	"package.json", "go.mod", "Gemfile", "requirements.txt", "pyproject.toml",
+	"Cargo.toml", "pom.xml", "build.gradle", "mix.exs", "pubspec.yaml",
+	"CMakeLists.txt", "setup.py", "setup.cfg",
+}
+
+// FindAppIndicator checks whether dir contains any app indicator file.
+// Returns the first matching filename and true, or ("", false) if none found.
+func FindAppIndicator(dir string) (string, bool) {
+	for _, indicator := range AppIndicatorFiles {
+		if _, err := os.Stat(filepath.Join(dir, indicator)); err == nil {
+			return indicator, true
+		}
+	}
+	return "", false
+}
+
+// SensitiveDirs are system directories where projects must not be created.
+var SensitiveDirs = []string{"/etc", "/usr", "/var", "/tmp", "/bin", "/sbin"}

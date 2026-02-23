@@ -257,15 +257,6 @@ func expandDir(dir string) string {
 	return abs
 }
 
-// appIndicators are files whose presence suggests the directory already
-// contains an application project (and should use "di add" instead).
-var appIndicators = []string{
-	"docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml",
-	"package.json", "go.mod", "Gemfile", "requirements.txt", "pyproject.toml",
-	"Cargo.toml", "pom.xml", "build.gradle", "mix.exs", "pubspec.yaml",
-	"CMakeLists.txt", "setup.py", "setup.cfg",
-}
-
 func validateDir(dir string) error {
 	home := os.Getenv("HOME")
 	if home != "" && !strings.HasPrefix(dir, home) {
@@ -273,8 +264,7 @@ func validateDir(dir string) error {
 	}
 
 	// Reject sensitive directories
-	sensitive := []string{"/etc", "/usr", "/var", "/tmp", "/bin", "/sbin"}
-	for _, s := range sensitive {
+	for _, s := range config.SensitiveDirs {
 		if strings.HasPrefix(dir, s) {
 			return fmt.Errorf("refusing to create project in system directory: %s", dir)
 		}
@@ -282,11 +272,8 @@ func validateDir(dir string) error {
 
 	// If the directory exists, check for app indicator files
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
-		for _, indicator := range appIndicators {
-			indicatorPath := filepath.Join(dir, indicator)
-			if _, err := os.Stat(indicatorPath); err == nil {
-				return fmt.Errorf("directory %q looks like an existing project (found %s); use 'di add %s' to import it", dir, indicator, dir)
-			}
+		if indicator, found := config.FindAppIndicator(dir); found {
+			return fmt.Errorf("directory %q looks like an existing project (found %s); use 'di add %s' to import it", dir, indicator, dir)
 		}
 	}
 
