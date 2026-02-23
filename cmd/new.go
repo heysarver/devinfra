@@ -49,7 +49,7 @@ func init() {
 }
 
 // validPresets lists the supported project type presets.
-var validPresets = []string{"wordpress"}
+var validPresets = []string{"wordpress", "ghost"}
 
 func runNew(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
@@ -194,6 +194,14 @@ func applyPreset(opts *project.CreateOpts, preset string) {
 			"wp-content/themes",
 			"wp-content/plugins",
 		}
+	case "ghost":
+		opts.Preset = "ghost"
+		opts.Services = []config.Service{{Name: "www", Port: 2368}}
+		opts.HostMode = false
+		opts.Scaffolding = []string{
+			"content/themes",
+			"content/images",
+		}
 	}
 }
 
@@ -249,6 +257,15 @@ func expandDir(dir string) string {
 	return abs
 }
 
+// appIndicators are files whose presence suggests the directory already
+// contains an application project (and should use "di add" instead).
+var appIndicators = []string{
+	"docker-compose.yaml", "docker-compose.yml", "compose.yaml", "compose.yml",
+	"package.json", "go.mod", "Gemfile", "requirements.txt", "pyproject.toml",
+	"Cargo.toml", "pom.xml", "build.gradle", "mix.exs", "pubspec.yaml",
+	"CMakeLists.txt", "setup.py", "setup.cfg",
+}
+
 func validateDir(dir string) error {
 	home := os.Getenv("HOME")
 	if home != "" && !strings.HasPrefix(dir, home) {
@@ -263,11 +280,13 @@ func validateDir(dir string) error {
 		}
 	}
 
-	// Check if directory exists and is non-empty
+	// If the directory exists, check for app indicator files
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
-		entries, _ := os.ReadDir(dir)
-		if len(entries) > 0 {
-			return fmt.Errorf("directory %q already exists and is not empty; use 'di add %s' to import an existing project", dir, dir)
+		for _, indicator := range appIndicators {
+			indicatorPath := filepath.Join(dir, indicator)
+			if _, err := os.Stat(indicatorPath); err == nil {
+				return fmt.Errorf("directory %q looks like an existing project (found %s); use 'di add %s' to import it", dir, indicator, dir)
+			}
 		}
 	}
 
