@@ -118,9 +118,12 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	}
 
 	// Generate README
-	if opts.Preset == "wordpress" {
+	switch {
+	case opts.Preset == "wordpress" || hasFlavorInList(opts.Flavors, "wordpress"):
 		generateWordPressReadme(opts.Name, dir)
-	} else {
+	case opts.Preset == "ghost" || hasFlavorInList(opts.Flavors, "ghost"):
+		generateGhostReadme(opts.Name, dir)
+	default:
 		generateReadme(opts.Name, dir, opts.Services)
 	}
 
@@ -195,6 +198,10 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	if opts.Preset == "wordpress" || hasFlavorInList(opts.Flavors, "wordpress") {
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/wp-admin/install.php to complete WordPress setup.\n", opts.Name)
+	}
+	if opts.Preset == "ghost" || hasFlavorInList(opts.Flavors, "ghost") {
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/ghost/ to complete Ghost setup.\n", opts.Name)
 	}
 
 	return nil
@@ -422,9 +429,36 @@ func generateWordPressReadme(name, dir string) {
 	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
 }
 
+func generateGhostReadme(name, dir string) {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("# %s\n\n", name))
+	b.WriteString("## Quick Start\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("make up      # Start Ghost + MySQL\n")
+	b.WriteString("make down    # Stop project\n")
+	b.WriteString("make logs    # Tail logs\n")
+	b.WriteString("make ps      # Show containers\n")
+	b.WriteString("```\n\n")
+	b.WriteString("## Ghost Setup\n\n")
+	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.test/ghost/ to create your admin account.\n\n", name))
+	b.WriteString("## URLs\n\n")
+	b.WriteString(fmt.Sprintf("- https://%s.test (Ghost)\n", name))
+	b.WriteString(fmt.Sprintf("- https://www.%s.test (Ghost)\n", name))
+	b.WriteString(fmt.Sprintf("- https://%s.test/ghost/ (Admin panel)\n", name))
+	b.WriteString("\n## Infrastructure\n\n")
+	b.WriteString("This project uses [devinfra](https://github.com/heysarver/devinfra) for local development infrastructure.\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("di up      # Start infrastructure\n")
+	b.WriteString("di doctor  # Verify everything works\n")
+	b.WriteString("```\n")
+
+	_ = os.WriteFile(filepath.Join(dir, "README.md"), []byte(b.String()), 0644)
+}
+
 // entrypointFlavors are flavors that provide their own web-facing service,
 // replacing the default web service in the base compose.
-var entrypointFlavors = []string{"wordpress"}
+var entrypointFlavors = []string{"wordpress", "ghost"}
 
 func hasEntrypointFlavor(flavors []string) bool {
 	for _, f := range flavors {
@@ -452,6 +486,8 @@ func entrypointServices(flavors []string) []config.Service {
 		switch f {
 		case "wordpress":
 			return []config.Service{{Name: "www", Port: 80}}
+		case "ghost":
+			return []config.Service{{Name: "www", Port: 2368}}
 		}
 	}
 	return nil

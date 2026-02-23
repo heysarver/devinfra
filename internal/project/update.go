@@ -70,7 +70,8 @@ var passwordMapping = map[string]string{
 	"MINIO_ROOT_PASSWORD":    "minio",
 	"MYSQL_PASSWORD":         "mysql",
 	"MYSQL_ROOT_PASSWORD":    "mysql",
-	"WORDPRESS_DB_PASSWORD":  "mysql",
+	"WORDPRESS_DB_PASSWORD":          "mysql",
+	"database__connection__password": "mysql",
 }
 
 // extractPasswords reads an existing compose overlay and extracts known password values.

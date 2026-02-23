@@ -49,7 +49,7 @@ func init() {
 }
 
 // validPresets lists the supported project type presets.
-var validPresets = []string{"wordpress"}
+var validPresets = []string{"wordpress", "ghost"}
 
 func runNew(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
@@ -194,6 +194,10 @@ func applyPreset(opts *project.CreateOpts, preset string) {
 			"wp-content/themes",
 			"wp-content/plugins",
 		}
+	case "ghost":
+		opts.Preset = "ghost"
+		opts.Services = []config.Service{{Name: "www", Port: 2368}}
+		opts.HostMode = false
 	}
 }
 
