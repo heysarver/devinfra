@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 
+	"github.com/charmbracelet/huh"
 	"github.com/heysarver/devinfra/internal/compose"
 	"github.com/heysarver/devinfra/internal/config"
 	"github.com/heysarver/devinfra/internal/ui"
@@ -39,6 +41,41 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if config.IsInitialized() && flagImportFrom == "" {
 		ui.Ok("Already initialized at %s", config.ConfigDir())
 		return nil
+	}
+
+	// Ask about import when no --import-from flag and not skipping platform setup
+	if flagImportFrom == "" && !flagSkipPlatform && !flagYes {
+		var wantsImport bool
+		confirm := huh.NewConfirm().
+			Title("Import an existing devinfra config?").
+			Affirmative("Yes, import").
+			Negative("No, start fresh").
+			Value(&wantsImport)
+		if err := huh.NewForm(huh.NewGroup(confirm)).Run(); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				ui.Info("Cancelled.")
+				return nil
+			}
+			return err
+		}
+		if wantsImport {
+			pathInput := huh.NewInput().
+				Title("Path to existing config directory").
+				Validate(func(s string) error {
+					if _, err := os.Stat(s); err != nil {
+						return fmt.Errorf("path not found: %s", s)
+					}
+					return nil
+				}).
+				Value(&flagImportFrom)
+			if err := huh.NewForm(huh.NewGroup(pathInput)).Run(); err != nil {
+				if errors.Is(err, huh.ErrUserAborted) {
+					ui.Info("Cancelled.")
+					return nil
+				}
+				return err
+			}
+		}
 	}
 
 	// Create directories

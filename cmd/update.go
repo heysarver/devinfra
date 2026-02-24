@@ -10,14 +10,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+
 var flagUpdateRestart bool
 
 var updateCmd = &cobra.Command{
-	Use:   "update <project>",
+	Use:   "update [project]",
 	Short: "Re-render flavor overlays from current templates",
 	Long:  "Regenerate flavor overlay files for a project using the latest devinfra templates, preserving existing passwords.",
 	GroupID: "project",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	ValidArgsFunction: projectNameCompletion,
 	RunE:  runUpdate,
 }
@@ -29,6 +30,18 @@ func init() {
 
 func runUpdate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+
+	if len(args) == 0 {
+		name, err := pickProject("Select project to update")
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			ui.Info("Cancelled.")
+			return nil
+		}
+		args = []string{name}
+	}
 	name := args[0]
 
 	project.TemplatesFS = embeddedTemplatesFS
