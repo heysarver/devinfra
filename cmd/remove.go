@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"os"
+	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/heysarver/devinfra/internal/config"
 	"github.com/heysarver/devinfra/internal/project"
 	"github.com/heysarver/devinfra/internal/ui"
@@ -11,18 +13,18 @@ import (
 )
 
 var (
-	flagForce              bool
+	flagForce               bool
 	flagNoDirectoryPreserve bool
 )
 
 var removeCmd = &cobra.Command{
-	Use:   "remove <project>",
-	Short: "Remove a project from the registry",
-	Long:  "Stop project containers, remove certificates and dynamic configs, and unregister the project. The project directory is preserved.",
+	Use:     "remove [project]",
+	Short:   "Remove a project from the registry",
+	Long:    "Stop project containers, remove certificates and dynamic configs, and unregister the project. The project directory is preserved.",
 	GroupID: "project",
-	Args:  cobra.ExactArgs(1),
+	Args:    cobra.MaximumNArgs(1),
 	ValidArgsFunction: projectNameCompletion,
-	RunE:  runRemove,
+	RunE:    runRemove,
 }
 
 func init() {
@@ -33,6 +35,19 @@ func init() {
 
 func runRemove(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+
+	// Project select when no arg provided
+	if len(args) == 0 {
+		name, err := pickProject("Select project to remove")
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			ui.Info("Cancelled.")
+			return nil
+		}
+		args = []string{name}
+	}
 	name := args[0]
 
 	// Verify project exists
@@ -47,28 +62,43 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	// Confirm unless --force or --yes
 	if !flagForce && !flagYes {
-		fmt.Fprintf(os.Stderr, "This will remove project '%s' from devinfra:\n", name)
-		fmt.Fprintf(os.Stderr, "  - Stop project containers (if running)\n")
-		fmt.Fprintf(os.Stderr, "  - Delete certs for *.%s.test\n", name)
-		fmt.Fprintf(os.Stderr, "  - Delete Traefik dynamic configs\n")
-		fmt.Fprintf(os.Stderr, "  - Remove from projects.yaml\n")
-		if flagNoDirectoryPreserve {
-			fmt.Fprintf(os.Stderr, "  - DELETE project directory (%s)\n", p.Dir)
+		description := buildRemoveDescription(name, p, flagNoDirectoryPreserve)
+		var ok bool
+		confirm := huh.NewConfirm().
+			Title(fmt.Sprintf("Remove project '%s'?", name)).
+			Description(description).
+			Affirmative("Yes, remove").
+			Negative("Cancel").
+			Value(&ok)
+		if err := huh.NewForm(huh.NewGroup(confirm)).Run(); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				ui.Info("Cancelled.")
+				return nil
+			}
+			return err
 		}
-		fmt.Fprintln(os.Stderr)
-		if !flagNoDirectoryPreserve {
-			fmt.Fprintf(os.Stderr, "  NOTE: The project directory (%s) will NOT be deleted.\n", p.Dir)
-		}
-		fmt.Fprintln(os.Stderr)
-
-		fmt.Fprint(os.Stderr, "Continue? [y/N] ")
-		var answer string
-		_, _ = fmt.Scanln(&answer)
-		if answer != "y" && answer != "Y" {
+		if !ok {
 			ui.Info("Cancelled.")
 			return nil
 		}
 	}
 
 	return project.Remove(ctx, name, flagNoDirectoryPreserve)
+}
+
+func buildRemoveDescription(name string, p *config.Project, noDirectoryPreserve bool) string {
+	var lines []string
+	lines = append(lines,
+		fmt.Sprintf("This will remove project '%s' from devinfra:", name),
+		"  - Stop project containers (if running)",
+		fmt.Sprintf("  - Delete certs for *.%s.test", name),
+		"  - Delete Traefik dynamic configs",
+		"  - Remove from projects.yaml",
+	)
+	if noDirectoryPreserve {
+		lines = append(lines, fmt.Sprintf("  - DELETE project directory (%s)", p.Dir))
+	} else {
+		lines = append(lines, fmt.Sprintf("\n  NOTE: The project directory (%s) will NOT be deleted.", p.Dir))
+	}
+	return strings.Join(lines, "\n")
 }

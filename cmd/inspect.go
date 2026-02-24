@@ -23,10 +23,10 @@ type inspectOutput struct {
 }
 
 var inspectCmd = &cobra.Command{
-	Use:   "inspect <project>",
+	Use:   "inspect [project]",
 	Short: "Show full project detail",
 	GroupID: "project",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	ValidArgsFunction: projectNameCompletion,
 	RunE:  runInspect,
 }
@@ -37,6 +37,18 @@ func init() {
 
 func runInspect(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+
+	if len(args) == 0 {
+		name, err := pickProject("Select project to inspect")
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			ui.Info("Cancelled.")
+			return nil
+		}
+		args = []string{name}
+	}
 	name := args[0]
 
 	reg, err := config.LoadRegistry()
