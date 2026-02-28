@@ -67,9 +67,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 
 		// Build URLs
-		urls := []string{fmt.Sprintf("https://%s.test", p.Name)}
+		tld := config.TLD()
+		urls := []string{fmt.Sprintf("https://%s.%s", p.Name, tld)}
 		for _, svc := range p.Services {
-			urls = append(urls, fmt.Sprintf("https://%s.%s.test", svc.Name, p.Name))
+			urls = append(urls, fmt.Sprintf("https://%s.%s.%s", svc.Name, p.Name, tld))
 		}
 
 		svcNames := make([]string, len(p.Services))

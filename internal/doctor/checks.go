@@ -122,8 +122,9 @@ func RunAll(ctx context.Context) Report {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		tld := config.TLD()
 		add(check(ctx, "Infra certs", func() bool {
-			_, err := os.Stat(filepath.Join(config.CertsDir(), "traefik.test+1.pem"))
+			_, err := os.Stat(filepath.Join(config.CertsDir(), fmt.Sprintf("traefik.%s+1.pem", tld)))
 			return err == nil
 		}, "Run 'di init' to generate infrastructure certs"))
 	}()
@@ -132,9 +133,10 @@ func RunAll(ctx context.Context) Report {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		tld := config.TLD()
 		add(check(ctx, "DNS resolution", func() bool {
 			port := config.DNSPort()
-			cmd := exec.CommandContext(ctx, "dig", "+short", "test.test", "@127.0.0.1", "-p", port)
+			cmd := exec.CommandContext(ctx, "dig", "+short", tld+"."+tld, "@127.0.0.1", "-p", port)
 			out, err := cmd.Output()
 			if err != nil {
 				return false

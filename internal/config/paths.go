@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/adrg/xdg"
 )
@@ -37,6 +38,24 @@ func DNSPort() string {
 		return p
 	}
 	return "5354"
+}
+
+// TLD reads the configured local TLD from the TLD environment variable,
+// falls back to parsing the .env file, and defaults to "test".
+func TLD() string {
+	if t := os.Getenv("TLD"); t != "" {
+		return t
+	}
+	if data, err := os.ReadFile(EnvFilePath()); err == nil {
+		for _, line := range strings.Split(string(data), "\n") {
+			if v, ok := strings.CutPrefix(line, "TLD="); ok {
+				if t := strings.TrimSpace(v); t != "" {
+					return t
+				}
+			}
+		}
+	}
+	return "test"
 }
 
 // EnsureDirs creates all required directories with appropriate permissions.

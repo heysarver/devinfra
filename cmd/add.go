@@ -332,7 +332,7 @@ func promptServiceSelection(detected []compose.DetectedService) ([]config.Servic
 
 	var selectedNames []string
 	multiSelect := huh.NewMultiSelect[string]().
-		Title("Select services for .test domain routing").
+		Title(fmt.Sprintf("Select services for .%s domain routing", config.TLD())).
 		Options(opts...).
 		Value(&selectedNames)
 

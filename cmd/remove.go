@@ -91,7 +91,7 @@ func buildRemoveDescription(name string, p *config.Project, noDirectoryPreserve 
 	lines = append(lines,
 		fmt.Sprintf("This will remove project '%s' from devinfra:", name),
 		"  - Stop project containers (if running)",
-		fmt.Sprintf("  - Delete certs for *.%s.test", name),
+		fmt.Sprintf("  - Delete certs for *.%s.%s", name, config.TLD()),
 		"  - Delete Traefik dynamic configs",
 		"  - Remove from projects.yaml",
 	)

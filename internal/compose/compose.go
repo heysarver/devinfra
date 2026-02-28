@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/heysarver/devinfra/internal/config"
 	"github.com/heysarver/devinfra/internal/ui"
@@ -23,9 +25,27 @@ var embeddedDynamic embed.FS
 //go:embed all:embed/scripts
 var embeddedScripts embed.FS
 
-// ExtractEmbedded writes embedded compose files to the config directory.
-func ExtractEmbedded() error {
-	// Extract compose files
+// embedData holds the template data used when rendering embedded files.
+type embedData struct {
+	TLD string
+}
+
+// renderTemplate renders src as a Go template with the given TLD and returns the result.
+func renderTemplate(name string, src []byte, tld string) ([]byte, error) {
+	tmpl, err := template.New(name).Parse(string(src))
+	if err != nil {
+		return nil, fmt.Errorf("parsing template %s: %w", name, err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, embedData{TLD: tld}); err != nil {
+		return nil, fmt.Errorf("executing template %s: %w", name, err)
+	}
+	return buf.Bytes(), nil
+}
+
+// ExtractEmbedded writes embedded compose files to the config directory,
+// rendering each file with the given TLD substituted for {{.TLD}} placeholders.
+func ExtractEmbedded(tld string) error {
 	entries := []struct {
 		embedPath string
 		destPath  string
@@ -44,7 +64,11 @@ func ExtractEmbedded() error {
 				return fmt.Errorf("reading embedded %s: %w", e.embedPath, err)
 			}
 		}
-		if err := os.WriteFile(e.destPath, data, 0644); err != nil {
+		rendered, err := renderTemplate(e.embedPath, data, tld)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(e.destPath, rendered, 0644); err != nil {
 			return fmt.Errorf("writing %s: %w", e.destPath, err)
 		}
 	}
@@ -52,13 +76,19 @@ func ExtractEmbedded() error {
 	return nil
 }
 
-// ExtractSetupScript extracts and returns the path to a platform setup script.
-func ExtractSetupScript(platform string) (string, error) {
+// ExtractSetupScript extracts and returns the path to a platform setup script,
+// rendering it with the given TLD substituted for {{.TLD}} placeholders.
+func ExtractSetupScript(platform, tld string) (string, error) {
 	name := fmt.Sprintf("setup-%s.sh", strings.ToLower(platform))
 	embedPath := filepath.Join("embed", "scripts", name)
 	data, err := fs.ReadFile(embeddedScripts, embedPath)
 	if err != nil {
 		return "", fmt.Errorf("no setup script for platform %s: %w", platform, err)
+	}
+
+	rendered, err := renderTemplate(name, data, tld)
+	if err != nil {
+		return "", err
 	}
 
 	destDir := filepath.Join(config.ConfigDir(), "scripts")
@@ -67,7 +97,7 @@ func ExtractSetupScript(platform string) (string, error) {
 	}
 
 	destPath := filepath.Join(destDir, name)
-	if err := os.WriteFile(destPath, data, 0755); err != nil {
+	if err := os.WriteFile(destPath, rendered, 0755); err != nil {
 		return "", err
 	}
 	return destPath, nil
