@@ -15,7 +15,7 @@ sudo apt-get install -y -qq libnss3-tools mkcert
 info "Installing local CA..."
 mkcert -install
 
-info "Configuring DNS for .test domains..."
+info "Configuring DNS for .{{.TLD}} domains..."
 
 if ! systemctl is-active --quiet NetworkManager 2>/dev/null; then
   warn "NetworkManager not active. Using standalone dnsmasq approach."
@@ -30,7 +30,7 @@ EOF
 
   sudo apt-get install -y -qq dnsmasq
   sudo tee /etc/dnsmasq.d/test-domain.conf > /dev/null <<'EOF'
-address=/test/127.0.0.1
+address=/{{.TLD}}/127.0.0.1
 server=8.8.8.8
 server=8.8.4.4
 EOF
@@ -49,14 +49,14 @@ bind-interfaces
 EOF
 
   sudo tee /etc/NetworkManager/dnsmasq.d/test-domain.conf > /dev/null <<'EOF'
-address=/test/127.0.0.1
+address=/{{.TLD}}/127.0.0.1
 EOF
 
   sudo mkdir -p /etc/systemd/resolved.conf.d
   sudo tee /etc/systemd/resolved.conf.d/test-dns.conf > /dev/null <<'EOF'
 [Resolve]
 DNS=127.0.0.2
-Domains=~test
+Domains=~{{.TLD}}
 EOF
 
   sudo systemctl restart NetworkManager

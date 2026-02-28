@@ -266,14 +266,15 @@ func buildSummary(r *WizardResult, preset string) string {
 		}
 		b.WriteString(fmt.Sprintf("Mode:      %s\n", mode))
 	}
+	tld := config.TLD()
 	b.WriteString("\nServices:\n")
 	for i, svc := range r.Services {
 		if i == 0 {
-			b.WriteString(fmt.Sprintf("  %s (port %d) -> https://%s.test, https://%s.%s.test\n",
-				svc.Name, svc.Port, r.Name, svc.Name, r.Name))
+			b.WriteString(fmt.Sprintf("  %s (port %d) -> https://%s.%s, https://%s.%s.%s\n",
+				svc.Name, svc.Port, r.Name, tld, svc.Name, r.Name, tld))
 		} else {
-			b.WriteString(fmt.Sprintf("  %s (port %d) -> https://%s.%s.test\n",
-				svc.Name, svc.Port, svc.Name, r.Name))
+			b.WriteString(fmt.Sprintf("  %s (port %d) -> https://%s.%s.%s\n",
+				svc.Name, svc.Port, svc.Name, r.Name, tld))
 		}
 	}
 

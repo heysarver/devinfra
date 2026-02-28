@@ -74,10 +74,11 @@ func runInspect(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build URLs
-	urls := []string{fmt.Sprintf("https://%s.test", name)}
+	tld := config.TLD()
+	urls := []string{fmt.Sprintf("https://%s.%s", name, tld)}
 	for i, svc := range p.Services {
 		if i > 0 {
-			urls = append(urls, fmt.Sprintf("https://%s.%s.test", svc.Name, name))
+			urls = append(urls, fmt.Sprintf("https://%s.%s.%s", svc.Name, name, tld))
 		}
 	}
 

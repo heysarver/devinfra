@@ -6,6 +6,8 @@ import (
 	"context"
 	"os/exec"
 	"strings"
+
+	"github.com/heysarver/devinfra/internal/config"
 )
 
 func platformChecks(ctx context.Context) []CheckResult {
@@ -16,14 +18,15 @@ func platformChecks(ctx context.Context) []CheckResult {
 		return cmd.Run() == nil
 	}, "Install libnss3-tools: sudo apt install libnss3-tools"))
 
-	checks = append(checks, check(ctx, "systemd-resolved .test", func() bool {
+	tld := config.TLD()
+	checks = append(checks, check(ctx, "systemd-resolved ."+tld, func() bool {
 		cmd := exec.CommandContext(ctx, "resolvectl", "status")
 		out, err := cmd.Output()
 		if err != nil {
 			return false
 		}
-		return strings.Contains(string(out), "test")
-	}, "Run 'di init' to configure systemd-resolved for .test domains"))
+		return strings.Contains(string(out), tld)
+	}, "Run 'di init' to configure systemd-resolved for ."+tld+" domains"))
 
 	checks = append(checks, check(ctx, "Docker group", func() bool {
 		cmd := exec.CommandContext(ctx, "id", "-nG")

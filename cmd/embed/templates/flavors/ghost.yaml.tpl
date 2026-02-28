@@ -3,7 +3,7 @@ services:
     image: ghost:5-alpine
     restart: unless-stopped
     environment:
-      url: https://{{.ProjectName}}.test
+      url: https://{{.ProjectName}}.{{.TLD}}
       database__client: mysql
       database__connection__host: mysql
       database__connection__user: ghost
@@ -19,7 +19,7 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.{{.ProjectName}}-ghost.rule=Host(`{{.ProjectName}}.test`) || Host(`www.{{.ProjectName}}.test`)"
+      - "traefik.http.routers.{{.ProjectName}}-ghost.rule=Host(`{{.ProjectName}}.{{.TLD}}`) || Host(`www.{{.ProjectName}}.{{.TLD}}`)"
       - "traefik.http.routers.{{.ProjectName}}-ghost.entrypoints=websecure"
       - "traefik.http.routers.{{.ProjectName}}-ghost.tls=true"
       - "traefik.http.services.{{.ProjectName}}-ghost.loadbalancer.server.port=2368"

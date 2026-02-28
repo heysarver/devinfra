@@ -34,6 +34,7 @@ type CreateOpts struct {
 
 type templateData struct {
 	ProjectName      string
+	TLD              string
 	PostgresPassword string
 	RabbitmqPassword string
 	MinioPassword    string
@@ -68,6 +69,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	// Prepare template data
 	data := templateData{
 		ProjectName:      opts.Name,
+		TLD:              config.TLD(),
 		PostgresPassword: randomPassword(24),
 		RabbitmqPassword: randomPassword(24),
 		MinioPassword:    randomPassword(24),
@@ -171,7 +173,7 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	project := config.Project{
 		Name:     opts.Name,
 		Dir:      dir,
-		Domain:   fmt.Sprintf("*.%s.test", opts.Name),
+		Domain:   fmt.Sprintf("*.%s.%s", opts.Name, config.TLD()),
 		HostMode: opts.HostMode,
 		Services: opts.Services,
 		Flavors:  opts.Flavors,
@@ -196,17 +198,18 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	// Success — disarm rollback
 	rb.disarm()
 
+	tld := config.TLD()
 	ui.Ok("Project '%s' created!", opts.Name)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "  Directory:  %s\n", dir)
 	fmt.Fprintln(os.Stderr, "  URLs:")
 	for i, svc := range opts.Services {
 		if i == 0 {
-			fmt.Fprintf(os.Stderr, "    https://%s.test\n", opts.Name)
+			fmt.Fprintf(os.Stderr, "    https://%s.%s\n", opts.Name, tld)
 		}
-		fmt.Fprintf(os.Stderr, "    https://%s.%s.test\n", svc.Name, opts.Name)
+		fmt.Fprintf(os.Stderr, "    https://%s.%s.%s\n", svc.Name, opts.Name, tld)
 	}
-	fmt.Fprintf(os.Stderr, "  Dashboard:  https://traefik.test\n")
+	fmt.Fprintf(os.Stderr, "  Dashboard:  https://traefik.%s\n", tld)
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Next steps:")
 	fmt.Fprintf(os.Stderr, "  cd %s\n", dir)
@@ -214,11 +217,11 @@ func Create(ctx context.Context, opts CreateOpts) error {
 	fmt.Fprintln(os.Stderr, "  make logs   # Tail logs")
 	if opts.Preset == "wordpress" || hasFlavorInList(opts.Flavors, "wordpress") {
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/wp-admin/install.php to complete WordPress setup.\n", opts.Name)
+		fmt.Fprintf(os.Stderr, "  Visit https://%s.%s/wp-admin/install.php to complete WordPress setup.\n", opts.Name, tld)
 	}
 	if opts.Preset == "ghost" || hasFlavorInList(opts.Flavors, "ghost") {
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintf(os.Stderr, "  Visit https://%s.test/ghost/ to complete Ghost setup.\n", opts.Name)
+		fmt.Fprintf(os.Stderr, "  Visit https://%s.%s/ghost/ to complete Ghost setup.\n", opts.Name, tld)
 	}
 
 	return nil
@@ -308,6 +311,7 @@ func generateDockerCompose(name, dir string, services []config.Service) error {
 		return nil
 	}
 
+	tld := config.TLD()
 	var b strings.Builder
 
 	b.WriteString("services:\n")
@@ -316,9 +320,9 @@ func generateDockerCompose(name, dir string, services []config.Service) error {
 
 		var rule string
 		if i == 0 {
-			rule = fmt.Sprintf("Host(`%s.test`) || Host(`%s.%s.test`)", name, svc.Name, name)
+			rule = fmt.Sprintf("Host(`%s.%s`) || Host(`%s.%s.%s`)", name, tld, svc.Name, name, tld)
 		} else {
-			rule = fmt.Sprintf("Host(`%s.%s.test`)", svc.Name, name)
+			rule = fmt.Sprintf("Host(`%s.%s.%s`)", svc.Name, name, tld)
 		}
 
 		b.WriteString(fmt.Sprintf("  %s:\n", svc.Name))
@@ -346,6 +350,7 @@ func generateDockerCompose(name, dir string, services []config.Service) error {
 }
 
 func generateHostConfig(name, dir string, services []config.Service) error {
+	tld := config.TLD()
 	var b strings.Builder
 
 	// Traefik file-provider config
@@ -355,9 +360,9 @@ func generateHostConfig(name, dir string, services []config.Service) error {
 		routerName := fmt.Sprintf("%s-%s", name, svc.Name)
 		var rule string
 		if i == 0 {
-			rule = fmt.Sprintf("Host(`%s.test`) || Host(`%s.%s.test`)", name, svc.Name, name)
+			rule = fmt.Sprintf("Host(`%s.%s`) || Host(`%s.%s.%s`)", name, tld, svc.Name, name, tld)
 		} else {
-			rule = fmt.Sprintf("Host(`%s.%s.test`)", svc.Name, name)
+			rule = fmt.Sprintf("Host(`%s.%s.%s`)", svc.Name, name, tld)
 		}
 		b.WriteString(fmt.Sprintf("    %s:\n", routerName))
 		b.WriteString(fmt.Sprintf("      rule: \"%s\"\n", rule))
@@ -399,6 +404,7 @@ func generateReadme(name, dir string, services []config.Service) {
 		return
 	}
 
+	tld := config.TLD()
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -412,9 +418,9 @@ func generateReadme(name, dir string, services []config.Service) {
 	b.WriteString("## URLs\n\n")
 	for i, svc := range services {
 		if i == 0 {
-			b.WriteString(fmt.Sprintf("- https://%s.test\n", name))
+			b.WriteString(fmt.Sprintf("- https://%s.%s\n", name, tld))
 		}
-		b.WriteString(fmt.Sprintf("- https://%s.%s.test\n", svc.Name, name))
+		b.WriteString(fmt.Sprintf("- https://%s.%s.%s\n", svc.Name, name, tld))
 	}
 	b.WriteString("\n## Infrastructure\n\n")
 	b.WriteString("This project uses [devinfra](https://github.com/heysarver/devinfra) for local development infrastructure.\n\n")
@@ -460,6 +466,7 @@ func generateWordPressReadme(name, dir string) {
 		return
 	}
 
+	tld := config.TLD()
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -471,10 +478,10 @@ func generateWordPressReadme(name, dir string) {
 	b.WriteString("make ps      # Show containers\n")
 	b.WriteString("```\n\n")
 	b.WriteString("## WordPress Setup\n\n")
-	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.test/wp-admin/install.php to complete the WordPress installation.\n\n", name))
+	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.%s/wp-admin/install.php to complete the WordPress installation.\n\n", name, tld))
 	b.WriteString("## URLs\n\n")
-	b.WriteString(fmt.Sprintf("- https://%s.test (WordPress)\n", name))
-	b.WriteString(fmt.Sprintf("- https://www.%s.test (WordPress)\n", name))
+	b.WriteString(fmt.Sprintf("- https://%s.%s (WordPress)\n", name, tld))
+	b.WriteString(fmt.Sprintf("- https://www.%s.%s (WordPress)\n", name, tld))
 	b.WriteString("\n## Development\n\n")
 	b.WriteString("Theme and plugin files are in `wp-content/`:\n\n")
 	b.WriteString("- `wp-content/themes/` — Custom themes\n")
@@ -497,6 +504,7 @@ func generateGhostReadme(name, dir string) {
 		return
 	}
 
+	tld := config.TLD()
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf("# %s\n\n", name))
@@ -508,11 +516,11 @@ func generateGhostReadme(name, dir string) {
 	b.WriteString("make ps      # Show containers\n")
 	b.WriteString("```\n\n")
 	b.WriteString("## Ghost Setup\n\n")
-	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.test/ghost/ to create your admin account.\n\n", name))
+	b.WriteString(fmt.Sprintf("After running `make up`, visit https://%s.%s/ghost/ to create your admin account.\n\n", name, tld))
 	b.WriteString("## URLs\n\n")
-	b.WriteString(fmt.Sprintf("- https://%s.test (Ghost)\n", name))
-	b.WriteString(fmt.Sprintf("- https://www.%s.test (Ghost)\n", name))
-	b.WriteString(fmt.Sprintf("- https://%s.test/ghost/ (Admin panel)\n", name))
+	b.WriteString(fmt.Sprintf("- https://%s.%s (Ghost)\n", name, tld))
+	b.WriteString(fmt.Sprintf("- https://www.%s.%s (Ghost)\n", name, tld))
+	b.WriteString(fmt.Sprintf("- https://%s.%s/ghost/ (Admin panel)\n", name, tld))
 	b.WriteString("\n## Development\n\n")
 	b.WriteString("Ghost content files are in `content/`:\n\n")
 	b.WriteString("- `content/themes/` — Custom themes\n")

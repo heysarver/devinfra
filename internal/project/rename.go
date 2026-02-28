@@ -60,7 +60,7 @@ func Rename(ctx context.Context, opts RenameOpts) error {
 		}
 
 		// Remove old certs, TLS config, and host config (if any)
-		ui.Info("Removing old certs for %s.test...", opts.OldName)
+		ui.Info("Removing old certs for %s.%s...", opts.OldName, config.TLD())
 		_ = compose.RemoveCerts(opts.OldName)
 
 		// Generate certs for new domain
@@ -85,7 +85,7 @@ func Rename(ctx context.Context, opts RenameOpts) error {
 		if reg.Projects[i].Name == opts.OldName {
 			if nameChanged {
 				reg.Projects[i].Name = opts.NewName
-				reg.Projects[i].Domain = fmt.Sprintf("*.%s.test", opts.NewName)
+				reg.Projects[i].Domain = fmt.Sprintf("*.%s.%s", opts.NewName, config.TLD())
 			}
 			if dirChanged {
 				reg.Projects[i].Dir = opts.NewDir
@@ -114,7 +114,7 @@ func Rename(ctx context.Context, opts RenameOpts) error {
 	if nameChanged && !p.HostMode {
 		fmt.Fprintln(os.Stderr)
 		ui.Warn("docker-compose files may still reference '%s' in Traefik labels and network names.", opts.OldName)
-		fmt.Fprintf(os.Stderr, "  Update Host rules and router names to use '%s.test', then run:\n", opts.NewName)
+		fmt.Fprintf(os.Stderr, "  Update Host rules and router names to use '%s.%s', then run:\n", opts.NewName, config.TLD())
 		fmt.Fprintf(os.Stderr, "  di up %s\n", displayName)
 	} else if nameChanged {
 		fmt.Fprintln(os.Stderr)

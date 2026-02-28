@@ -63,7 +63,7 @@ services:
       - ../dynamic:/etc/traefik/dynamic:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.test`)"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.{{.TLD}}`)"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.tls=true"

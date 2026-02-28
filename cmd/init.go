@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/heysarver/devinfra/internal/compose"
@@ -17,8 +19,20 @@ import (
 
 var (
 	flagImportFrom   string
+	flagImportCA     string
 	flagSkipPlatform bool
+	flagTLD          string
 )
+
+// tldLabelRe matches a valid DNS label: lowercase alphanumeric, hyphens allowed
+// in the middle. Same rules as RFC 1123.
+var tldLabelRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// commonPublicTLDs is a short list of real TLDs that would cause confusion.
+var commonPublicTLDs = map[string]bool{
+	"com": true, "net": true, "org": true, "io": true,
+	"dev": true, "app": true, "gov": true, "edu": true,
+}
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -30,20 +44,52 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().StringVar(&flagImportFrom, "import-from", "", "import projects.yaml, certs, and dynamic configs from existing dev-infra repo")
+	initCmd.Flags().StringVar(&flagImportCA, "import-ca", "", "path to a mkcert CAROOT directory from another machine to trust")
 	initCmd.Flags().BoolVar(&flagSkipPlatform, "skip-platform", false, "skip platform-specific setup (requires sudo)")
+	initCmd.Flags().StringVar(&flagTLD, "tld", "test", "local TLD to use for all projects (default: test)")
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
-	// Check if already initialized
-	if config.IsInitialized() && flagImportFrom == "" {
-		ui.Ok("Already initialized at %s", config.ConfigDir())
+	// Validate --import-ca path early, before doing anything else
+	if flagImportCA != "" {
+		if err := validateImportCAPath(flagImportCA); err != nil {
+			return err
+		}
+	}
+
+	// Check incompatible flag combination: --import-ca + --skip-platform on a fresh install
+	if flagSkipPlatform && flagImportCA != "" && !config.IsInitialized() {
+		return fmt.Errorf("--import-ca requires mkcert to be installed; remove --skip-platform or install mkcert manually first")
+	}
+
+	// Already initialized? Allow --import-ca to pass through; block everything else.
+	if config.IsInitialized() {
+		if flagImportCA != "" {
+			return runImportCA(flagImportCA)
+		}
+		if flagTLD != "test" {
+			return fmt.Errorf("devinfra is already initialized; to change the TLD manually edit %s, re-run platform setup, and regenerate infra certs", config.EnvFilePath())
+		}
+		if flagImportFrom == "" {
+			ui.Ok("Already initialized at %s", config.ConfigDir())
+			return nil
+		}
+	}
+
+	// Collect TLD (flag or interactive wizard)
+	tld, err := collectTLD()
+	if err != nil {
+		return err
+	}
+	if tld == "" {
+		ui.Info("Cancelled.")
 		return nil
 	}
 
-	// Ask about import when no --import-from flag and not skipping platform setup
+	// Ask about import when no --import-from flag and not skipping interactive mode
 	if flagImportFrom == "" && !flagSkipPlatform && !flagYes {
 		var wantsImport bool
 		confirm := huh.NewConfirm().
@@ -84,9 +130,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating directories: %w", err)
 	}
 
-	// Extract embedded compose files
+	// Extract embedded compose files (rendered with chosen TLD)
 	ui.Info("Extracting embedded resources...")
-	if err := compose.ExtractEmbedded(); err != nil {
+	if err := compose.ExtractEmbedded(tld); err != nil {
 		return fmt.Errorf("extracting embedded files: %w", err)
 	}
 
@@ -105,7 +151,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			ui.Warn("Platform %s not supported for automatic setup. Use --skip-platform.", platform)
 		} else {
 			ui.Info("Running platform setup (%s)...", platform)
-			scriptPath, err := compose.ExtractSetupScript(platform)
+			scriptPath, err := compose.ExtractSetupScript(platform, tld)
 			if err != nil {
 				return fmt.Errorf("extracting setup script: %w", err)
 			}
@@ -118,6 +164,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 				ui.Warn("Platform setup had issues: %v", err)
 				ui.Warn("Run 'di doctor' to check what needs fixing.")
 			}
+		}
+	}
+
+	// Import and trust an external mkcert CA (runs after platform setup so mkcert is available)
+	if flagImportCA != "" {
+		if err := runImportCA(flagImportCA); err != nil {
+			return err
 		}
 	}
 
@@ -135,14 +188,103 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Write default .env if it doesn't exist
 	envPath := config.EnvFilePath()
 	if _, err := os.Stat(envPath); os.IsNotExist(err) {
-		_ = os.WriteFile(envPath, []byte(fmt.Sprintf("DNS_PORT=%s\n", config.DNSPort())), 0644)
+		_ = os.WriteFile(envPath, []byte(fmt.Sprintf("DNS_PORT=%s\nTLD=%s\n", config.DNSPort(), tld)), 0644)
 	}
 
 	ui.Ok("Initialization complete!")
+	if tld != "test" {
+		ui.Warn("TLD is set to '.%s'. Changing TLD after projects are created requires regenerating all project certs.", tld)
+	}
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Next steps:")
 	fmt.Fprintln(os.Stderr, "  di up      # Start Traefik + DNSMasq")
 	fmt.Fprintln(os.Stderr, "  di doctor  # Verify everything works")
+	return nil
+}
+
+// collectTLD returns the TLD to use: from the --tld flag when non-interactive,
+// or from an interactive wizard prompt when running interactively.
+// Returns ("", nil) if the user cancelled.
+func collectTLD() (string, error) {
+	tld := flagTLD
+
+	// Interactive prompt when not --yes mode
+	if !flagYes {
+		input := huh.NewInput().
+			Title("Local TLD to use for all projects").
+			Description("Default is 'test' (.test domains). Common alternatives: local, dev").
+			Placeholder("test").
+			Value(&tld).
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("TLD cannot be empty")
+				}
+				return nil
+			})
+		if err := huh.NewForm(huh.NewGroup(input)).Run(); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return "", nil
+			}
+			return "", err
+		}
+	}
+
+	if err := validateTLD(tld); err != nil {
+		return "", err
+	}
+	return tld, nil
+}
+
+// validateTLD checks that tld is a valid DNS label and emits warnings for
+// known problematic values.
+func validateTLD(tld string) error {
+	if tld == "" {
+		return fmt.Errorf("TLD cannot be empty")
+	}
+	if len(tld) > 63 {
+		return fmt.Errorf("TLD must be 63 characters or fewer")
+	}
+	if !tldLabelRe.MatchString(tld) {
+		return fmt.Errorf("TLD %q is invalid: must contain only lowercase letters, digits, and hyphens, and must not start or end with a hyphen", tld)
+	}
+	if strings.ContainsRune(tld, '.') {
+		return fmt.Errorf("TLD must not contain dots")
+	}
+	if tld == "localhost" {
+		return fmt.Errorf("TLD 'localhost' is reserved (RFC 6761) and cannot be used")
+	}
+
+	// Advisory warnings
+	if tld == "local" && runtime.GOOS == "darwin" {
+		ui.Warn("'.local' is used by Bonjour/mDNS on macOS and may cause DNS resolution conflicts.")
+	}
+	if commonPublicTLDs[tld] {
+		ui.Warn("'.%s' is a real public TLD. Using it locally may break access to real websites on that TLD.", tld)
+	}
+
+	return nil
+}
+
+// validateImportCAPath checks that the given path contains rootCA.pem.
+func validateImportCAPath(caroot string) error {
+	rootCA := filepath.Join(caroot, "rootCA.pem")
+	if _, err := os.Stat(rootCA); err != nil {
+		return fmt.Errorf("--import-ca: no rootCA.pem found in %s (is this a mkcert CAROOT directory?)", caroot)
+	}
+	return nil
+}
+
+// runImportCA installs the CA at caroot into the system trust stores using mkcert.
+func runImportCA(caroot string) error {
+	ui.Info("Trusting CA from %s...", caroot)
+	cmd := exec.Command("mkcert", "-install")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("CAROOT=%s", caroot))
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("importing CA from %s: %w", caroot, err)
+	}
+	ui.Ok("CA from %s is now trusted.", caroot)
 	return nil
 }
 

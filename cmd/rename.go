@@ -135,10 +135,11 @@ func buildRenameDescription(oldName, newName string, nameChanged, dirChanged boo
 	var lines []string
 	lines = append(lines, fmt.Sprintf("Renaming project '%s':", oldName))
 	if nameChanged {
+		tld := config.TLD()
 		lines = append(lines,
 			"  - Stop running containers",
-			fmt.Sprintf("  - Delete certs for *.%s.test", oldName),
-			fmt.Sprintf("  - Generate new certs for *.%s.test", newName),
+			fmt.Sprintf("  - Delete certs for *.%s.%s", oldName, tld),
+			fmt.Sprintf("  - Generate new certs for *.%s.%s", newName, tld),
 			fmt.Sprintf("  - Update registry: name '%s' → '%s'", oldName, newName),
 		)
 	}
