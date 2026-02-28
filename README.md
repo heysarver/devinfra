@@ -1,6 +1,6 @@
 # devinfra
 
-Local development infrastructure manager. Single binary that manages Traefik, DNSMasq, and Docker Compose projects with `.test` domains and HTTPS.
+Local development infrastructure manager. Single binary that manages Traefik, DNSMasq, and Docker Compose projects with a configurable local TLD (default `.test`) and HTTPS.
 
 ## Install
 
@@ -63,6 +63,8 @@ di down --all                  # Stop all projects
 di flavor add myapp redis      # Add flavor overlay
 di remove myapp                # Unregister (keeps directory)
 di remove myapp --no-directory-preserve  # Unregister and delete directory
+
+di regenerate                  # Rebuild overlays, certs, and Traefik configs for all projects
 ```
 
 ### Certificates
@@ -88,6 +90,7 @@ di doctor --json               # Structured health report
 ### Utilities
 
 ```bash
+di config set tld claw         # Change local TLD (regenerates all certs, overlays, and DNS config)
 di clean                       # Remove certs + dynamic configs
 di version                     # Print version info
 di completion bash             # Shell completion script
@@ -110,7 +113,7 @@ Runtime state lives in the XDG config directory. On macOS this is `~/Library/App
 
 ```
 ~/.config/devinfra/
-├── .env                           # DNS_PORT=5354
+├── .env                           # DNS_PORT=5354, TLD=test
 ├── projects.yaml                  # Project registry
 ├── compose/docker-compose.yaml    # Core infrastructure
 ├── certs/                         # mkcert certificates
