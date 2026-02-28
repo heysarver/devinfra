@@ -62,14 +62,15 @@ func TLD() string {
 // On macOS, it also creates a ~/.config/devinfra symlink pointing to the
 // actual config directory under ~/Library/Application Support.
 func EnsureDirs() error {
-	dirs := []string{
-		ConfigDir(),
-		ComposeDir(),
-		CertsDir(),
-		DynamicDir(),
-	}
-	for _, d := range dirs {
+	// Private dirs: only the owner needs access
+	for _, d := range []string{ConfigDir(), ComposeDir()} {
 		if err := os.MkdirAll(d, 0700); err != nil {
+			return err
+		}
+	}
+	// Public dirs: mounted into Docker containers (Traefik), must be world-readable
+	for _, d := range []string{CertsDir(), DynamicDir()} {
+		if err := os.MkdirAll(d, 0755); err != nil {
 			return err
 		}
 	}

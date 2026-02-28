@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 )
 
@@ -92,3 +93,40 @@ func FindAppIndicator(dir string) (string, bool) {
 
 // SensitiveDirs are system directories where projects must not be created.
 var SensitiveDirs = []string{"/etc", "/usr", "/var", "/tmp", "/bin", "/sbin"}
+
+// tldLabelRe matches a valid DNS label: lowercase alphanumeric, hyphens allowed
+// in the middle. Same rules as RFC 1123.
+var tldLabelRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// commonPublicTLDs is a short list of real TLDs that would cause confusion.
+var commonPublicTLDs = map[string]bool{
+	"com": true, "net": true, "org": true, "io": true,
+	"dev": true, "app": true, "gov": true, "edu": true,
+}
+
+// ValidateTLD checks that tld is a valid DNS label and emits warnings for
+// known problematic values.
+func ValidateTLD(tld string) error {
+	if tld == "" {
+		return fmt.Errorf("TLD cannot be empty")
+	}
+	if len(tld) > 63 {
+		return fmt.Errorf("TLD must be 63 characters or fewer")
+	}
+	if !tldLabelRe.MatchString(tld) {
+		return fmt.Errorf("TLD %q is invalid: must contain only lowercase letters, digits, and hyphens, and must not start or end with a hyphen", tld)
+	}
+	if tld == "localhost" {
+		return fmt.Errorf("TLD 'localhost' is reserved (RFC 6761) and cannot be used")
+	}
+
+	// Advisory warnings
+	if tld == "local" && runtime.GOOS == "darwin" {
+		fmt.Fprintln(os.Stderr, "[WARN] '.local' is used by Bonjour/mDNS on macOS and may cause DNS resolution conflicts.")
+	}
+	if commonPublicTLDs[tld] {
+		fmt.Fprintf(os.Stderr, "[WARN] '.%s' is a real public TLD. Using it locally may break access to real websites on that TLD.\n", tld)
+	}
+
+	return nil
+}

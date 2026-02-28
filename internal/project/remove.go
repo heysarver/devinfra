@@ -27,7 +27,7 @@ func Remove(ctx context.Context, name string, removeDir bool) error {
 	files := p.ComposeFiles()
 	if len(files) > 0 {
 		ui.Info("Stopping project containers...")
-		_ = compose.ProjectDown(ctx, projectDir, files)
+		_ = compose.ProjectDown(ctx, p.Name, projectDir, files)
 	}
 
 	// Remove certs
