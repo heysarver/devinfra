@@ -52,7 +52,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 			}
 			ui.Info("Starting %s...", p.Name)
 			files := p.ComposeFiles()
-			if err := compose.ProjectUp(ctx, p.Dir, files); err != nil {
+			if err := compose.ProjectUp(ctx, p.Name, p.Dir, files); err != nil {
 				ui.Warn("Failed to start %s: %v", p.Name, err)
 			} else {
 				ui.Ok("Started %s", p.Name)
@@ -109,7 +109,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 
 	ui.Info("Starting %s...", name)
 	files := p.ComposeFiles()
-	if err := compose.ProjectUp(ctx, p.Dir, files); err != nil {
+	if err := compose.ProjectUp(ctx, p.Name, p.Dir, files); err != nil {
 		return fmt.Errorf("starting %s: %w", name, err)
 	}
 	ui.Ok("Started %s", name)

@@ -39,5 +39,5 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	}
 
 	files := p.ComposeFiles()
-	return compose.ProjectLogs(ctx, p.Dir, files)
+	return compose.ProjectLogs(ctx, p.Name, p.Dir, files)
 }

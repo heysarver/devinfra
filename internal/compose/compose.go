@@ -129,22 +129,22 @@ func IsInfraRunning(ctx context.Context) bool {
 }
 
 // ProjectUp starts a specific project's containers.
-func ProjectUp(ctx context.Context, dir string, composeFiles []string) error {
-	args := buildComposeArgs(composeFiles)
+func ProjectUp(ctx context.Context, name, dir string, composeFiles []string) error {
+	args := buildComposeArgs(name, composeFiles)
 	args = append(args, "up", "-d")
 	return runRaw(ctx, dir, args...)
 }
 
 // ProjectDown stops a specific project's containers.
-func ProjectDown(ctx context.Context, dir string, composeFiles []string) error {
-	args := buildComposeArgs(composeFiles)
+func ProjectDown(ctx context.Context, name, dir string, composeFiles []string) error {
+	args := buildComposeArgs(name, composeFiles)
 	args = append(args, "down")
 	return runRaw(ctx, dir, args...)
 }
 
 // ProjectLogs tails logs from a specific project.
-func ProjectLogs(ctx context.Context, dir string, composeFiles []string) error {
-	args := buildComposeArgs(composeFiles)
+func ProjectLogs(ctx context.Context, name, dir string, composeFiles []string) error {
+	args := buildComposeArgs(name, composeFiles)
 	args = append(args, "logs", "-f")
 	return runRawAttached(ctx, dir, args...)
 }
@@ -189,8 +189,8 @@ func CreateNetwork(ctx context.Context) error {
 	return nil
 }
 
-func buildComposeArgs(files []string) []string {
-	args := []string{"compose"}
+func buildComposeArgs(name string, files []string) []string {
+	args := []string{"compose", "-p", name}
 	for _, f := range files {
 		args = append(args, "-f", f)
 	}

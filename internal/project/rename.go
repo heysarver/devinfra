@@ -56,7 +56,7 @@ func Rename(ctx context.Context, opts RenameOpts) error {
 		files := p.ComposeFiles()
 		if len(files) > 0 {
 			ui.Info("Stopping project containers...")
-			_ = compose.ProjectDown(ctx, p.Dir, files)
+			_ = compose.ProjectDown(ctx, p.Name, p.Dir, files)
 		}
 
 		// Remove old certs, TLS config, and host config (if any)

@@ -15,7 +15,7 @@ import (
 func GenerateCerts(ctx context.Context, name string) error {
 	tld := config.TLD()
 	certsDir := config.CertsDir()
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
+	if err := os.MkdirAll(certsDir, 0755); err != nil {
 		return fmt.Errorf("creating certs dir: %w", err)
 	}
 
@@ -42,7 +42,7 @@ func GenerateCerts(ctx context.Context, name string) error {
 func GenerateInfraCerts(ctx context.Context) error {
 	tld := config.TLD()
 	certsDir := config.CertsDir()
-	if err := os.MkdirAll(certsDir, 0700); err != nil {
+	if err := os.MkdirAll(certsDir, 0755); err != nil {
 		return fmt.Errorf("creating certs dir: %w", err)
 	}
 
@@ -68,7 +68,7 @@ func GenerateInfraCerts(ctx context.Context) error {
 func WriteTLSConfig(name string) error {
 	tld := config.TLD()
 	dynamicDir := config.DynamicDir()
-	if err := os.MkdirAll(dynamicDir, 0700); err != nil {
+	if err := os.MkdirAll(dynamicDir, 0755); err != nil {
 		return fmt.Errorf("creating dynamic dir: %w", err)
 	}
 

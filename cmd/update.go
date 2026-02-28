@@ -62,10 +62,10 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 		files := p.ComposeFiles()
 		ui.Info("Restarting %s...", name)
-		if err := compose.ProjectDown(ctx, p.Dir, files); err != nil {
+		if err := compose.ProjectDown(ctx, p.Name, p.Dir, files); err != nil {
 			ui.Warn("Failed to stop %s: %v", name, err)
 		}
-		if err := compose.ProjectUp(ctx, p.Dir, files); err != nil {
+		if err := compose.ProjectUp(ctx, p.Name, p.Dir, files); err != nil {
 			return fmt.Errorf("starting %s: %w", name, err)
 		}
 		ui.Ok("Restarted %s", name)
