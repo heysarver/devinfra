@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 var nameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
@@ -102,6 +103,43 @@ var tldLabelRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 var commonPublicTLDs = map[string]bool{
 	"com": true, "net": true, "org": true, "io": true,
 	"dev": true, "app": true, "gov": true, "edu": true,
+}
+
+// domainRe matches a valid DNS domain: labels separated by dots, each label
+// is lowercase alphanumeric with optional interior hyphens.
+var domainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
+
+// ValidateRemoteDomain checks that domain is a valid multi-label DNS name
+// (e.g. "claw.sarvent.cloud"). Must have at least two labels, no trailing dot.
+func ValidateRemoteDomain(domain string) error {
+	if domain == "" {
+		return fmt.Errorf("remote domain cannot be empty")
+	}
+	if strings.Contains(domain, "..") {
+		return fmt.Errorf("remote domain %q is invalid: consecutive dots are not allowed", domain)
+	}
+	if strings.HasSuffix(domain, ".") {
+		return fmt.Errorf("remote domain %q is invalid: trailing dot not allowed", domain)
+	}
+	if !domainRe.MatchString(domain) {
+		return fmt.Errorf("remote domain %q is invalid: must be a valid DNS name (e.g. claw.sarvent.cloud)", domain)
+	}
+	return nil
+}
+
+// ValidateACMEEmail checks that email looks like a basic email address.
+func ValidateACMEEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("ACME email cannot be empty")
+	}
+	at := strings.Index(email, "@")
+	if at < 1 || at == len(email)-1 {
+		return fmt.Errorf("ACME email %q is invalid: must be in user@domain format", email)
+	}
+	if strings.Contains(email[at+1:], "@") {
+		return fmt.Errorf("ACME email %q is invalid: multiple @ signs", email)
+	}
+	return nil
 }
 
 // ValidateTLD checks that tld is a valid DNS label and emits warnings for

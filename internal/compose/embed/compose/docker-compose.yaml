@@ -55,12 +55,25 @@ services:
       - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
       - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
       - "--log.level=INFO"
+{{- if .RemoteEnabled}}
+      - "--certificatesResolvers.cloudflare-acme.acme.email={{.ACMEEmail}}"
+      - "--certificatesResolvers.cloudflare-acme.acme.storage=/acme/cloudflare.json"
+      - "--certificatesResolvers.cloudflare-acme.acme.dnsChallenge.provider=cloudflare"
+      - "--certificatesResolvers.cloudflare-acme.acme.dnsChallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+{{- end}}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ../certs:/certs:ro
       - ../dynamic:/etc/traefik/dynamic:ro
+{{- if .RemoteEnabled}}
+      - ../acme:/acme:rw
+{{- end}}
+{{- if .RemoteEnabled}}
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+{{- end}}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard.rule=Host(`traefik.{{.TLD}}`)"
