@@ -68,9 +68,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 		// Build URLs
 		tld := config.TLD()
+		remote := config.Remote()
 		urls := []string{fmt.Sprintf("https://%s.%s", p.Name, tld)}
 		for _, svc := range p.Services {
 			urls = append(urls, fmt.Sprintf("https://%s.%s.%s", svc.Name, p.Name, tld))
+		}
+		if remote.Enabled {
+			urls = append(urls, fmt.Sprintf("https://%s.%s [remote]", p.Name, remote.Domain))
+			for _, svc := range p.Services {
+				urls = append(urls, fmt.Sprintf("https://%s.%s.%s [remote]", svc.Name, p.Name, remote.Domain))
+			}
 		}
 
 		svcNames := make([]string, len(p.Services))

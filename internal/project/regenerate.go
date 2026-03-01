@@ -50,7 +50,7 @@ func RegenerateAll(ctx context.Context) error {
 		// Rewrite overlay (non-host-mode projects with services only)
 		if !p.HostMode && len(p.Services) > 0 {
 			ui.Info("Regenerating overlay for %s...", p.Name)
-			if err := generateOverlay(p.Name, p.Dir, p.Services); err != nil {
+			if err := generateOverlay(p.Name, p.Dir, p.Services, config.Remote()); err != nil {
 				ui.Warn("Failed to regenerate overlay for %s: %v", p.Name, err)
 				failures = append(failures, p.Name)
 				continue

@@ -27,25 +27,34 @@ var embeddedScripts embed.FS
 
 // embedData holds the template data used when rendering embedded files.
 type embedData struct {
-	TLD string
+	TLD           string
+	RemoteEnabled bool
+	ACMEEmail     string
 }
 
-// renderTemplate renders src as a Go template with the given TLD and returns the result.
-func renderTemplate(name string, src []byte, tld string) ([]byte, error) {
+// renderTemplate renders src as a Go template with the given data and returns the result.
+func renderTemplate(name string, src []byte, data embedData) ([]byte, error) {
 	tmpl, err := template.New(name).Parse(string(src))
 	if err != nil {
 		return nil, fmt.Errorf("parsing template %s: %w", name, err)
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, embedData{TLD: tld}); err != nil {
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("executing template %s: %w", name, err)
 	}
 	return buf.Bytes(), nil
 }
 
 // ExtractEmbedded writes embedded compose files to the config directory,
-// rendering each file with the given TLD substituted for {{.TLD}} placeholders.
+// rendering each file with the given TLD and current remote config.
 func ExtractEmbedded(tld string) error {
+	remote := config.Remote()
+	data := embedData{
+		TLD:           tld,
+		RemoteEnabled: remote.Enabled,
+		ACMEEmail:     remote.ACMEEmail,
+	}
+
 	entries := []struct {
 		embedPath string
 		destPath  string
@@ -56,15 +65,15 @@ func ExtractEmbedded(tld string) error {
 	}
 
 	for _, e := range entries {
-		data, err := embeddedCompose.ReadFile(e.embedPath)
+		src, err := embeddedCompose.ReadFile(e.embedPath)
 		if err != nil {
 			// Try from dynamic embed
-			data, err = embeddedDynamic.ReadFile(e.embedPath)
+			src, err = embeddedDynamic.ReadFile(e.embedPath)
 			if err != nil {
 				return fmt.Errorf("reading embedded %s: %w", e.embedPath, err)
 			}
 		}
-		rendered, err := renderTemplate(e.embedPath, data, tld)
+		rendered, err := renderTemplate(e.embedPath, src, data)
 		if err != nil {
 			return err
 		}
@@ -86,7 +95,7 @@ func ExtractSetupScript(platform, tld string) (string, error) {
 		return "", fmt.Errorf("no setup script for platform %s: %w", platform, err)
 	}
 
-	rendered, err := renderTemplate(name, data, tld)
+	rendered, err := renderTemplate(name, data, embedData{TLD: tld})
 	if err != nil {
 		return "", err
 	}
@@ -103,8 +112,19 @@ func ExtractSetupScript(platform, tld string) (string, error) {
 	return destPath, nil
 }
 
+// EnsureAcmeDir creates the ACME certificate storage directory with
+// restricted permissions (0700). Called before starting infra when remote is enabled.
+func EnsureAcmeDir() error {
+	return os.MkdirAll(filepath.Join(config.ConfigDir(), "acme"), 0700)
+}
+
 // Up starts the core infrastructure containers.
 func Up(ctx context.Context) error {
+	if config.RemoteEnabled() {
+		if err := EnsureAcmeDir(); err != nil {
+			return fmt.Errorf("creating ACME directory: %w", err)
+		}
+	}
 	return run(ctx, config.ComposeDir(), "up", "-d")
 }
 
@@ -199,12 +219,34 @@ func buildComposeArgs(name string, files []string) []string {
 
 func run(ctx context.Context, dir string, composeArgs ...string) error {
 	args := append([]string{"compose", "-p", "devinfra"}, composeArgs...)
-	return runRaw(ctx, dir, args...)
+	ui.Info("Running: docker %s", strings.Join(args, " "))
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = dir
+	cmd.Env = infraEnv()
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func runAttached(ctx context.Context, dir string, composeArgs ...string) error {
 	args := append([]string{"compose", "-p", "devinfra"}, composeArgs...)
-	return runRawAttached(ctx, dir, args...)
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = dir
+	cmd.Env = infraEnv()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+// infraEnv returns the environment for infra (devinfra) compose commands,
+// including DNS_PORT and CF_DNS_API_TOKEN when remote is enabled.
+func infraEnv() []string {
+	env := append(os.Environ(), "DNS_PORT="+config.DNSPort())
+	if r := config.Remote(); r.Enabled && r.CloudflareToken != "" {
+		env = append(env, "CF_DNS_API_TOKEN="+r.CloudflareToken)
+	}
+	return env
 }
 
 func runRaw(ctx context.Context, dir string, args ...string) error {

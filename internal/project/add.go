@@ -41,7 +41,7 @@ func Add(ctx context.Context, opts AddOpts) error {
 	// Generate overlay if services were selected
 	if len(opts.Services) > 0 {
 		ui.Info("Generating docker-compose.devinfra.yaml...")
-		if err := generateOverlay(opts.Name, dir, opts.Services); err != nil {
+		if err := generateOverlay(opts.Name, dir, opts.Services, config.Remote()); err != nil {
 			return fmt.Errorf("generating overlay: %w", err)
 		}
 		rb.add(func() error {
@@ -117,7 +117,8 @@ func Add(ctx context.Context, opts AddOpts) error {
 }
 
 // generateOverlay creates a docker-compose.devinfra.yaml with Traefik labels and networks.
-func generateOverlay(name, dir string, services []config.Service) error {
+// When remote.Enabled, additional routers are generated for the remote domain.
+func generateOverlay(name, dir string, services []config.Service, remote config.RemoteConfig) error {
 	tld := config.TLD()
 	var b strings.Builder
 
@@ -126,11 +127,11 @@ func generateOverlay(name, dir string, services []config.Service) error {
 	for i, svc := range services {
 		routerName := fmt.Sprintf("%s-%s", name, svc.Name)
 
-		var rule string
+		var localRule string
 		if i == 0 {
-			rule = fmt.Sprintf("Host(`%s.%s`) || Host(`%s.%s.%s`)", name, tld, svc.Name, name, tld)
+			localRule = fmt.Sprintf("Host(`%s.%s`) || Host(`%s.%s.%s`)", name, tld, svc.Name, name, tld)
 		} else {
-			rule = fmt.Sprintf("Host(`%s.%s.%s`)", svc.Name, name, tld)
+			localRule = fmt.Sprintf("Host(`%s.%s.%s`)", svc.Name, name, tld)
 		}
 
 		b.WriteString(fmt.Sprintf("  %s:\n", svc.Name))
@@ -138,11 +139,31 @@ func generateOverlay(name, dir string, services []config.Service) error {
 		b.WriteString("      - traefik\n")
 		b.WriteString("    labels:\n")
 		b.WriteString("      - \"traefik.enable=true\"\n")
-		b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.rule=%s\"\n", routerName, rule))
+		b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.rule=%s\"\n", routerName, localRule))
 		b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.entrypoints=websecure\"\n", routerName))
 		b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.tls=true\"\n", routerName))
 		b.WriteString(fmt.Sprintf("      - \"traefik.http.services.%s.loadbalancer.server.port=%d\"\n", routerName, svc.Port))
 		b.WriteString("      - \"traefik.docker.network=traefik\"\n")
+
+		if remote.Enabled {
+			remoteRouterName := routerName + "-remote"
+			var remoteRule string
+			if i == 0 {
+				remoteRule = fmt.Sprintf("Host(`%s.%s`) || Host(`%s.%s.%s`)", name, remote.Domain, svc.Name, name, remote.Domain)
+			} else {
+				remoteRule = fmt.Sprintf("Host(`%s.%s.%s`)", svc.Name, name, remote.Domain)
+			}
+			b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.rule=%s\"\n", remoteRouterName, remoteRule))
+			b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.entrypoints=websecure\"\n", remoteRouterName))
+			b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.tls.certresolver=cloudflare-acme\"\n", remoteRouterName))
+			if i == 0 {
+				// SAN entries on the first service router trigger cert acquisition for the whole project
+				b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.tls.domains[0].main=*.%s\"\n", remoteRouterName, remote.Domain))
+				b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.tls.domains[1].main=*.%s.%s\"\n", remoteRouterName, name, remote.Domain))
+			}
+			b.WriteString(fmt.Sprintf("      - \"traefik.http.routers.%s.service=%s\"\n", remoteRouterName, routerName))
+		}
+
 		b.WriteString("\n")
 	}
 
